@@ -26,3 +26,12 @@ coverage/
 
 # Logs
 *.log
+
+# Claude Code
+.claude/
+
+# Project docs (not deployed, local reference only)
+archive/
+__tests__/
+CHANGELOG.md
+CLAUDE.md
