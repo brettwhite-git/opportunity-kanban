@@ -1,0 +1,160 @@
+# CLAUDE.md
+
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+
+## Workflow Orchestration
+
+### 1. Plan Mode Default
+- Enter plan mode for ANY non-trivial task (3+ steps or architectural decisions)
+- If something goes sideways, STOP and re-plan immediately — don't keep pushing
+- Use plan mode for verification steps, not just building
+- Write detailed specs upfront to reduce ambiguity
+
+### 2. Subagent Strategy
+- Use subagents liberally to keep main context window clean
+- Offload research, exploration, and parallel analysis to subagents
+- For complex problems, throw more compute at it via subagents
+- One task per subagent for focused execution
+
+### 3. Self-Improvement Loop
+- After ANY correction from the user: update `tasks/lessons.md` with the pattern
+- Write rules for yourself that prevent the same mistake
+- Ruthlessly iterate on these lessons until mistake rate drops
+- Review lessons at session start for relevant project
+
+### 4. Verification Before Done
+- Never mark a task complete without proving it works
+- Diff behavior between main and your changes when relevant
+- Ask yourself: "Would a staff engineer approve this?"
+- Run tests, check logs, demonstrate correctness
+
+### 5. Demand Elegance (Balanced)
+- For non-trivial changes: pause and ask "is there a more elegant way?"
+- If a fix feels hacky: "Knowing everything I know now, implement the elegant solution"
+- Skip this for simple, obvious fixes — don't over-engineer
+- Challenge your own work before presenting it
+
+### 6. Autonomous Bug Fixing
+- When given a bug report: just fix it. Don't ask for hand-holding
+- Point at logs, errors, failing tests — then resolve them
+- Zero context switching required from the user
+- Go fix failing CI tests without being told how
+
+## Task Management
+
+1. **Plan First**: Write plan to `tasks/todo.md` with checkable items
+2. **Verify Plan**: Check in before starting implementation
+3. **Track Progress**: Mark items complete as you go
+4. **Explain Changes**: High-level summary at each step
+5. **Document Results**: Add review section to `tasks/todo.md`
+6. **Capture Lessons**: Update `tasks/lessons.md` after corrections
+
+## Core Principles
+
+- **Simplicity First**: Make every change as simple as possible. Impact minimal code.
+- **No Laziness**: Find root causes. No temporary fixes. Senior developer standards.
+- **Minimal Impact**: Changes should only touch what's necessary. Avoid introducing bugs.
+
+## Project Overview
+
+NetSuite Opportunity Kanban Portlet — a SuiteApp (SuiteScript 2.1) that renders a drag-and-drop kanban board on NetSuite dashboards, letting sales reps move opportunities between status columns via AJAX.
+
+## Commands
+
+```bash
+npm install                            # Install @oracle/suitecloud-cli dependency
+npm run validate                       # Validate project structure and syntax
+npm run deploy                         # Deploy SuiteApp to NetSuite
+npm run deploy:validate                # Deploy with validation
+npm run setup:m2m                      # Re-register M2M credentials (if .p12 is stale)
+```
+
+M2M auth env vars (`SUITECLOUD_CI`, `SUITECLOUD_CI_PASSKEY`) are stored in `.env` (gitignored) and auto-sourced by all npm scripts. No manual `export` needed.
+
+No test runner, linter, or build step exists.
+
+## Architecture
+
+This is a **SuiteCloud Development Framework (SDF)** project, not a typical Node.js app. All source lives under `src/FileCabinet/SuiteApps/com.netsuite.opportunitykanban/`.
+
+### Script Types & Entry Points
+
+| Script | Type | Entry Point | Purpose |
+|--------|------|-------------|---------|
+| `portlet/OpportunityKanban.js` | Portlet | `render(params)` | Server-side: fetches data, generates HTML with inlined CSS, data script, and external JS reference |
+| `portlet/kanban-client.js` | Client IIFE | Self-executing on load | Browser-side: renders board from `window.KANBAN_DATA`, handles HTML5 DnD, AJAX updates, date filter |
+| `suitelet/UpdateOpportunityStatus.js` | Suitelet | `onRequest(context)` | Server-side AJAX endpoint: receives POST with `{opportunityId, entitystatus}`, validates permissions, updates record |
+| `lib/queries.js` | AMD Module | `getOpportunitiesByUser(userId)`, `getStatusColumns()` | Runs N/search for opportunities, formats results into board data structure |
+| `installer/InstallationScript.js` | Bundle Install | `afterInstall()`, `afterUpdate()`, `beforeUninstall()` | Lifecycle hooks for SuiteApp installation (currently just logging) |
+
+### Client-Side Approach: Hybrid Delivery
+
+**CSS** is inlined in a `<style>` block (works reliably in portlets). **Data** is injected via a small inline `<script>` setting `window.KANBAN_DATA` and `window.SUITELET_URL`. **Client JS** is loaded from an external file via `<script src>` (resolved by `N/file` with cache-busting).
+
+Large inline `<script>` blocks do NOT execute in NetSuite portlets — never inline significant JS. Small data-injection scripts are fine.
+
+The client uses **HTML5 native Drag and Drop API** (`draggable="true"`, `dragstart`/`dragover`/`drop` events) instead of any drag-and-drop library. Events are element-scoped, not global, which is critical for NetSuite portlet sandboxing.
+
+### Data Flow
+
+1. Portlet `render()` → calls `queries.getOpportunitiesByUser()` → N/search on opportunity records
+2. Results embedded as `window.KANBAN_DATA` in a small inline `<script>` block
+3. External `kanban-client.js` loads via `<script src>`, reads globals, calls `renderBoard()`
+4. User drags card → HTML5 `drop` event → XHR POST to `UpdateOpportunityStatus` suitelet
+5. Suitelet validates access, calls `record.submitFields()`, returns JSON response
+6. On failure, card reverts to original column automatically
+
+### Client-Side Globals
+
+- `window.KANBAN_DATA` — opportunity board data (set by small inline script)
+- `window.SUITELET_URL` — resolved URL for the update suitelet (set by small inline script)
+- `window._kanbanInitialized` — initialization guard (prevents duplicate execution on re-render)
+
+### Key Configuration Points
+
+- **Status IDs**: `queries.js` → `getStatusColumns()` — maps NetSuite entity status IDs to display names. These vary per NetSuite account and must be verified with `verify-environment.js`.
+- **Color coding**: Inlined in `OpportunityKanban.js` → `buildStyles()` — status colors use `[data-status="N"]` selectors
+- **Script/Deployment IDs**: Defined in `src/Objects/Scripts/*.xml` files, referenced in `OpportunityKanban.js` when resolving suitelet URL
+
+## SuiteScript Conventions
+
+- All server-side scripts use SuiteScript 2.1 module pattern (`@NApiVersion 2.1`, `define([...])`)
+- NetSuite modules used: `N/search`, `N/record`, `N/runtime`, `N/url`, `N/log`, `N/format`, `N/file`
+- Logging uses `N/log` (not `console.log`) on server side; client-side uses `console.log`
+- Script definitions in `src/Objects/Scripts/` XML files control deployment, audience, and execution role
+- The `manifest.xml` and `deploy.xml` at `src/` root define the SuiteApp bundle metadata
+
+## SDF Gotchas
+
+- **No large inline scripts**: NetSuite portlets do NOT execute large inline `<script>` blocks. Use external JS files via `<script src>` (resolved with `N/file`). Small inline scripts for data injection (e.g., `window.KANBAN_DATA = {...}`) are fine. CSS can be safely inlined in `<style>` blocks.
+- **XML element names**: Use `<portlet>`, `<suitelet>`, `<bundleinstallationscript>` — NOT `<portletscripttype>` etc.
+- **Portlet XML requires `<portlettype>`**: Must be HTML, FORM, LIST, or LINKS
+- **Publisher ID**: Must be fully qualified with exactly one period (e.g., `com.netsuite`)
+- **deploy.xml**: SuiteApp projects don't support `<configuration>` or `<translationcollections>` sections
+- **`allpartners` field**: Requires CRM feature in manifest — remove if not needed
+- **`isinactive` filter**: Not valid on opportunity records
+
+## M2M Authentication
+
+- **Auth ID**: `m2m-kanban` — configured in `src/project.json` as `defaultAuthId`
+- **Account**: `td3061543` (MFG 25.2 AI, role Administrator)
+- **Certificate ID**: `Se82Nm_f75pjdaX6dnCeZfR8QF6MY6dxSRNpCJyHSv0`
+- **Private key**: `m2m-key.pem` (project root, gitignored)
+- **Credentials store**: `~/.suitecloud-sdk/credentials_ci.p12` (encrypted with passkey from `.env`)
+
+If credentials become stale or `.p12` won't decrypt, delete `~/.suitecloud-sdk/credentials_ci.p12` and run `npm run setup:m2m`.
+
+## Environment Verification
+
+Run `verify-environment.js` as a temporary Suitelet in the target NetSuite account to discover account-specific status IDs, field availability, and role configuration before first deploy.
+
+## Deployment Troubleshooting
+
+| Symptom | Cause | Fix |
+|---------|-------|-----|
+| Empty kanban board | Status IDs don't match account | Update `queries.js` `getStatusColumns()` |
+| "Field not found" error | Custom field ID mismatch | Update field IDs in `queries.js` |
+| "Script ID exists" error | Duplicate script ID | Add suffix to script IDs in XML + update reference in `OpportunityKanban.js` |
+| Drag works but doesn't save | Permission issue | Check user permissions on opportunities |
+| Board renders but drag fails | HTML5 DnD not working | Check `draggable="true"` and `dragover` has `e.preventDefault()` |
+| "Permission violation" | Wrong role | Update `<runasrole>` in XML script definitions |

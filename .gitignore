@@ -1,0 +1,28 @@
+# Secrets
+m2m-key.pem
+m2m-cert.pem
+.env
+
+# Dependency directories
+node_modules/
+
+# SuiteCloud SDK
+.suitecloud-sdk/
+project.json
+
+# IDEs and editors
+.idea
+.vscode
+*.iml
+
+# Packaged SuiteCloud projects
+build/
+
+# Test coverage
+coverage/
+
+# System files
+.DS_Store
+
+# Logs
+*.log

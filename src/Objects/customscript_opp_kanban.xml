@@ -1,0 +1,19 @@
+<portlet scriptid="customscript_opp_kanban">
+  <name>Opportunity Kanban Board</name>
+  <scriptfile>[/SuiteApps/com.netsuite.opportunitykanban/portlet/OpportunityKanban.js]</scriptfile>
+  <notifyowner>F</notifyowner>
+  <description>Sales pipeline kanban board showing opportunities grouped by entity status</description>
+  <portlettype>HTML</portlettype>
+  <isinactive>F</isinactive>
+  <scriptdeployments>
+    <scriptdeployment scriptid="customdeploy_opp_kanban">
+      <allemployees>T</allemployees>
+      <allroles>T</allroles>
+      <isdeployed>T</isdeployed>
+      <loglevel>ERROR</loglevel>
+      <runasrole>ADMINISTRATOR</runasrole>
+      <status>RELEASED</status>
+      <title>Opportunity Kanban Board</title>
+    </scriptdeployment>
+  </scriptdeployments>
+</portlet>
