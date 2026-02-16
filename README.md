@@ -8,9 +8,7 @@
 
 A NetSuite SuiteApp that renders a kanban board portlet on dashboards, giving sales reps a visual pipeline of their opportunities organized by status columns.
 
-
-![opp-kanban](https://github.com/user-attachments/assets/9139c4b1-a344-44ec-9d0f-f62e28465398)
-
+![oppkanban](https://github.com/user-attachments/assets/b11ba2e7-12f2-4a68-88d1-91d1dc8b87f9)
 
 
 ## Features
