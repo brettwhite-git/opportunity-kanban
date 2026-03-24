@@ -35,6 +35,22 @@
         return '$' + num.toFixed(0);
     }
 
+    function formatFullCurrency(value) {
+        if (!value && value !== 0) return '$0';
+        var num = parseFloat(value);
+        if (isNaN(num)) return '$0';
+        var rounded = Math.round(num);
+        return '$' + rounded.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+    }
+
+    function classifyStatus(statusText) {
+        if (!statusText) return 'open';
+        var t = statusText.toLowerCase();
+        if (t.indexOf('closed won') >= 0 || t.indexOf('closed - won') >= 0) return 'won';
+        if (t.indexOf('closed lost') >= 0 || t.indexOf('closed - lost') >= 0) return 'lost';
+        return 'open';
+    }
+
     // ---- Self-contained filter logic ----
     // NetSuite renders portlets in an iframe, then extracts the HTML into the
     // main page. All JS references (window/document functions, addEventListener)
@@ -56,7 +72,21 @@
             "var n=0;var cc=cols[k].querySelectorAll('.kanban-card');" +
             "for(var m=0;m<cc.length;m++){if(cc[m].style.display!=='none')n++}" +
             "cols[k].querySelector('.kanban-column-count').textContent=n;" +
-            "cols[k].style.display=n>0?'':'none'}";
+            "cols[k].style.display=n>0?'':'none'}" +
+            "var sums={open:0,won:0,lost:0};" +
+            "for(var i2=0;i2<cards.length;i2++){" +
+            "if(cards[i2].style.display!=='none'){" +
+            "var st=cards[i2].getAttribute('data-status-type')||'open';" +
+            "var am=parseFloat(cards[i2].getAttribute('data-amount'))||0;" +
+            "if(sums.hasOwnProperty(st))sums[st]+=am}}" +
+            "var fmt=function(v){var r=Math.round(v);" +
+            "return'$'+r.toString().replace(/\\B(?=(\\d{3})+(?!\\d))/g,',')};" +
+            "var oe=document.getElementById('kpi-open');" +
+            "var we=document.getElementById('kpi-won');" +
+            "var le=document.getElementById('kpi-lost');" +
+            "if(oe)oe.textContent=fmt(sums.open);" +
+            "if(we)we.textContent=fmt(sums.won);" +
+            "if(le)le.textContent=fmt(sums.lost);";
     }
 
     // Equivalent JS function for jsdom test compatibility
@@ -83,6 +113,7 @@
             cols[k].querySelector('.kanban-column-count').textContent = n;
             cols[k].style.display = n > 0 ? '' : 'none';
         }
+        updateKpis();
     }
 
     // ---- DOM Construction ----
@@ -95,6 +126,8 @@
         card.className = 'kanban-card';
         card.setAttribute('data-opp-id', opp.id);
         card.setAttribute('data-cg', opp.closeDateGroup || '');
+        card.setAttribute('data-amount', opp.projectedtotal || '0');
+        card.setAttribute('data-status-type', classifyStatus(opp.entitystatusText));
 
         var header = document.createElement('div');
         header.className = 'kanban-card-header';
@@ -158,6 +191,58 @@
         return card;
     }
 
+    // ---- KPI Cards ----
+
+    function buildKpiRow() {
+        var row = document.createElement('div');
+        row.className = 'kanban-kpi-row';
+
+        var kpis = [
+            { id: 'kpi-open', label: 'Open Value' },
+            { id: 'kpi-won', label: 'Closed Won' },
+            { id: 'kpi-lost', label: 'Lost' }
+        ];
+
+        kpis.forEach(function (kpi) {
+            var card = document.createElement('div');
+            card.className = 'kanban-kpi-card';
+
+            var label = document.createElement('div');
+            label.className = 'kanban-kpi-label';
+            label.textContent = kpi.label;
+
+            var value = document.createElement('div');
+            value.className = 'kanban-kpi-value';
+            value.id = kpi.id;
+            value.textContent = '$0';
+
+            card.appendChild(label);
+            card.appendChild(value);
+            row.appendChild(card);
+        });
+
+        return row;
+    }
+
+    function updateKpis() {
+        var c = document.getElementById('kanban-board-container');
+        if (!c) return;
+        var cards = c.querySelectorAll('.kanban-card');
+        var sums = { open: 0, won: 0, lost: 0 };
+        for (var i = 0; i < cards.length; i++) {
+            if (cards[i].style.display === 'none') continue;
+            var type = cards[i].getAttribute('data-status-type') || 'open';
+            var amt = parseFloat(cards[i].getAttribute('data-amount')) || 0;
+            if (sums.hasOwnProperty(type)) sums[type] += amt;
+        }
+        var openEl = document.getElementById('kpi-open');
+        var wonEl = document.getElementById('kpi-won');
+        var lostEl = document.getElementById('kpi-lost');
+        if (openEl) openEl.textContent = formatFullCurrency(sums.open);
+        if (wonEl) wonEl.textContent = formatFullCurrency(sums.won);
+        if (lostEl) lostEl.textContent = formatFullCurrency(sums.lost);
+    }
+
     function buildBoard(container) {
         var columns = data.columns;
         var allOpps = data.opportunities;
@@ -211,6 +296,7 @@
             toolbar.appendChild(btn);
         });
 
+        container.appendChild(buildKpiRow());
         container.appendChild(toolbar);
 
         // Columns wrapper

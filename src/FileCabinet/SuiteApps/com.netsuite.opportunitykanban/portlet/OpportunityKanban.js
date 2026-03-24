@@ -52,7 +52,7 @@ define(['N/runtime', 'N/file', '../lib/queries'], (runtime, file, queries) => {
     const buildStyles = () => {
         return `
 #kanban-board-container {
-    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    font-family: "Oracle Sans", "Helvetica Neue", -apple-system, BlinkMacSystemFont, sans-serif;
     font-size: 13px;
     color: #333;
 }
@@ -88,14 +88,14 @@ define(['N/runtime', 'N/file', '../lib/queries'], (runtime, file, queries) => {
 }
 
 .kanban-filter-btn:focus {
-    outline: 2px solid #4a90d9;
+    outline: 2px solid #325c72;
     outline-offset: 1px;
 }
 
 .kanban-filter-btn.active {
-    background: #4a90d9;
+    background: #325c72;
     color: #fff;
-    border-color: #4a90d9;
+    border-color: #325c72;
 }
 
 .kanban-columns {
@@ -108,7 +108,7 @@ define(['N/runtime', 'N/file', '../lib/queries'], (runtime, file, queries) => {
 
 .kanban-column {
     flex: 0 0 220px;
-    background: #f4f5f7;
+    background: #fbf9f8;
     border-radius: 6px;
     display: flex;
     flex-direction: column;
@@ -161,7 +161,7 @@ define(['N/runtime', 'N/file', '../lib/queries'], (runtime, file, queries) => {
     box-shadow: 0 1px 3px rgba(0,0,0,0.12);
     cursor: pointer;
     transition: box-shadow 0.15s ease;
-    border-left: 3px solid #4a90d9;
+    border-left: 3px solid #325c72;
 }
 
 .kanban-card:hover {
@@ -230,6 +230,41 @@ define(['N/runtime', 'N/file', '../lib/queries'], (runtime, file, queries) => {
     text-align: center;
     color: #888;
     font-size: 14px;
+}
+
+.kanban-kpi-row {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 16px;
+    margin: 0 0 16px;
+}
+
+.kanban-kpi-card {
+    padding: 16px;
+    height: 84px;
+    border: 1px solid rgba(22, 21, 19, 0.12);
+    border-radius: 6px;
+    background-color: transparent;
+    box-shadow: none;
+    box-sizing: border-box;
+    font-family: "Oracle Sans", "Helvetica Neue", sans-serif;
+}
+
+.kanban-kpi-label {
+    font-size: 16px;
+    font-weight: 400;
+    color: rgb(0, 0, 0);
+    margin: 0 0 8px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.kanban-kpi-value {
+    font-size: 16px;
+    font-weight: 700;
+    color: rgb(0, 0, 0);
+    display: flex;
+    align-items: center;
 }`;
     };
 
