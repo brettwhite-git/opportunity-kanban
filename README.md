@@ -23,14 +23,14 @@ By default, the portlet shows every Opportunity status found in the current user
 3. On **Parameters**, set **Opportunity Status Filter** to comma-separated Opportunity status internal IDs
 4. Save the deployment and reload the dashboard portlet
 
-Example values:
+Example internal ID values:
 
 ```text
-6,7,8
+6,7,8,9 
 ```
-<img width="3320" height="1278" alt="oppstatusfilter" src="https://github.com/user-attachments/assets/cce7e1da-d064-48d4-aca7-0fd3a417b4d3" />
-
 Leave the field blank to show all statuses. Use internal IDs, not status names; IDs can vary by NetSuite account, so this SuiteApp ships with the parameter blank.
+
+<img width="3320" height="1278" alt="oppstatusfilter" src="https://github.com/user-attachments/assets/cce7e1da-d064-48d4-aca7-0fd3a417b4d3" />
 
 ## Features
 
