@@ -1,14 +1,20 @@
 # Opportunity Kanban
 
-[![License: ISC](https://img.shields.io/badge/License-ISC-blue.svg)](https://opensource.org/licenses/ISC)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
 [![SuiteScript 2.1](https://img.shields.io/badge/SuiteScript-2.1-orange.svg)](https://docs.oracle.com/en/cloud/saas/netsuite/ns-online-help/chapter_4387172221.html)
-[![Tests: 35 passing](https://img.shields.io/badge/tests-35%20passing-brightgreen.svg)](#development)
+[![Tests: 50 passing](https://img.shields.io/badge/tests-50%20passing-brightgreen.svg)](#development)
 [![ESLint](https://img.shields.io/badge/linting-ESLint-purple.svg)](#development)
 [![SuiteCloud CLI v3](https://img.shields.io/badge/SuiteCloud_CLI-v3.1.2-lightgrey.svg)](https://github.com/nicholasglesmann/sdf-cli-gem)
 
 A NetSuite SuiteApp that renders a kanban board portlet on dashboards, giving sales reps a visual pipeline of their opportunities organized by status columns.
 
 ![oppkanban](https://github.com/user-attachments/assets/b11ba2e7-12f2-4a68-88d1-91d1dc8b87f9)
+
+## Educational Use Disclaimer
+
+> **Educational use only**
+>
+> This project is provided for educational and demonstration purposes only. The code is not certified for quality, security, correctness, or production readiness. Review, test, secure, and validate it in your own NetSuite account before relying on it.
 
 
 ## Features
@@ -17,6 +23,7 @@ A NetSuite SuiteApp that renders a kanban board portlet on dashboards, giving sa
 - **Inclusive date filters** — This Month, This Quarter, Next Quarter, Last Quarter (a deal closing this month also appears under This Quarter)
 - **Click-through navigation** — Click any card to open the full opportunity record; click the transaction ID to open in a new tab
 - **Auto-derived columns** — Status columns are built dynamically from your actual data, no configuration needed
+- **Optional status filter** — Admins can limit the board to selected Opportunity statuses from the script deployment record
 - **Currency formatting** — Projected totals shown as $150K, $2.5M, etc.
 - **Portlet-safe architecture** — Built to survive NetSuite's iframe extraction process using self-contained onclick handlers
 
@@ -26,7 +33,7 @@ A NetSuite SuiteApp that renders a kanban board portlet on dashboards, giving sa
 |-------|-----------|
 | Server-side | SuiteScript 2.1 (`N/search`, `N/runtime`, `N/file`) |
 | Client-side | Vanilla JavaScript (no frameworks) |
-| Build/Deploy | SuiteCloud CLI v3.1.2 with M2M authentication |
+| Build/Deploy | SuiteCloud SDK / SuiteCloud CLI |
 | Testing | Jest 29 + `@oracle/suitecloud-unit-testing` |
 | Linting | ESLint 8 + `eslint-plugin-suitescript` |
 
@@ -35,8 +42,9 @@ A NetSuite SuiteApp that renders a kanban board portlet on dashboards, giving sa
 ### Prerequisites
 
 - Node.js 18+
+- Java 17+ available on your PATH
+- SuiteCloud CLI or the SuiteCloud IDE extension
 - A NetSuite account with SuiteCloud Development Framework enabled
-- M2M certificate credentials for your target account
 
 ### Install
 
@@ -48,16 +56,14 @@ npm install
 
 ### Configure Authentication
 
-1. Place your M2M private key as `m2m-key.pem` in the project root
-2. Create a `.env` file with your credentials:
-   ```
-   SUITECLOUD_CI=<your-auth-id>
-   SUITECLOUD_CI_PASSKEY=<your-passkey>
-   ```
-3. Register the credentials (first time only):
-   ```bash
-   npm run setup:m2m
-   ```
+Authenticate with NetSuite using whichever SuiteCloud SDK flow fits your environment:
+
+- SuiteCloud CLI browser-based authentication
+- SuiteCloud IDE extension authentication
+- Existing local SuiteCloud auth IDs
+- CI credentials for automated validation or deployment
+
+The npm scripts in this repo call the SuiteCloud CLI and use the authentication context you have already configured locally.
 
 ### Deploy
 
@@ -67,6 +73,23 @@ npm run deploy      # Deploy to NetSuite
 ```
 
 After deploying, add the **Opportunity Kanban** portlet to any dashboard via **Personalize Dashboard > Custom Portlets**.
+
+### Optional Status Filter
+
+By default, the portlet shows every Opportunity status found in the current user's opportunities. To limit the board to specific statuses for a deployment, set the **Opportunity Status Filter** script parameter after deployment:
+
+1. In NetSuite, go to **Customization > Scripting > Script Deployments**
+2. Open the **Opportunity Kanban Board** deployment
+3. On **Parameters**, set **Opportunity Status Filter** to comma-separated Opportunity status internal IDs
+4. Save the deployment and reload the dashboard portlet
+
+Example values:
+
+```text
+6,7,8
+```
+
+Leave the field blank to show all statuses. Use internal IDs, not status names; IDs can vary by NetSuite account, so this SuiteApp ships with the parameter blank.
 
 ## Project Structure
 
@@ -78,15 +101,13 @@ opportunity-kanban/
 │   ├── FileCabinet/SuiteApps/
 │   │   └── com.netsuite.opportunitykanban/
 │   │       ├── portlet/
-│   │       │   ├── OpportunityKanban.js      # Server-side portlet script
+│   │       │   ├── opportunity-kanban.js     # Server-side portlet script
 │   │       │   └── kanban-client.js          # Client-side board rendering
 │   │       └── lib/
 │   │           └── queries.js                # Opportunity search & status derivation
 │   └── Objects/
 │       └── customscript_opp_kanban.xml       # Script deployment definition
-├── __tests__/                                # Jest unit tests (4 suites, 35 tests)
 ├── package.json
-├── jest.config.js
 └── .eslintrc.json
 ```
 
@@ -95,7 +116,7 @@ opportunity-kanban/
 ### Run Tests
 
 ```bash
-npm test              # Run all 35 tests
+npm test              # Run all 50 tests
 npm run test:watch    # Watch mode
 ```
 
@@ -123,4 +144,4 @@ This approach is necessary because NetSuite renders portlets inside an iframe, e
 
 ## License
 
-[ISC](https://opensource.org/licenses/ISC)
+[MIT](https://opensource.org/licenses/MIT)

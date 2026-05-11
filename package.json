@@ -3,10 +3,9 @@
   "version": "2.0.0",
   "description": "NetSuite Opportunity Kanban Board Portlet - Drag-and-drop sales pipeline visualization",
   "scripts": {
-    "validate": "export $(cat .env | xargs) && suitecloud project:validate",
-    "deploy": "export $(cat .env | xargs) && suitecloud project:deploy",
-    "deploy:validate": "export $(cat .env | xargs) && suitecloud project:deploy --validate",
-    "setup:m2m": "export $(cat .env | xargs) && suitecloud account:setup:ci --account td3061543 --authid m2m-kanban --certificateid Se82Nm_f75pjdaX6dnCeZfR8QF6MY6dxSRNpCJyHSv0 --privatekeypath ./m2m-key.pem",
+    "validate": "suitecloud project:validate",
+    "deploy": "suitecloud project:deploy",
+    "deploy:validate": "suitecloud project:deploy --validate",
     "test": "jest",
     "test:watch": "jest --watch",
     "lint": "eslint --no-error-on-unmatched-pattern src/FileCabinet/SuiteApps/com.netsuite.opportunitykanban/",
@@ -21,7 +20,7 @@
     "sales"
   ],
   "author": "",
-  "license": "ISC",
+  "license": "MIT",
   "dependencies": {
     "@oracle/suitecloud-cli": "^3.1.2"
   },

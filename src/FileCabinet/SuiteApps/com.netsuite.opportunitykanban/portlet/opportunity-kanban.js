@@ -6,20 +6,26 @@
 define(['N/runtime', 'N/file', '../lib/queries'], (runtime, file, queries) => {
 
     const render = (params) => {
-        const portletObj = params.portlet;
-        portletObj.title = 'Opportunity Kanban';
+        const portletObject = params.portlet;
+        portletObject.title = 'Opportunity Kanban';
 
         try {
             const currentUser = runtime.getCurrentUser();
             const userId = currentUser.id;
+            const selectedStatusIds = queries.normalizeStatusIds(
+                runtime.getCurrentScript().getParameter({
+                    name: 'custscript_opp_kanban_status_ids'
+                })
+            );
 
-            const opportunities = queries.getOpportunitiesByUser(userId);
+            const opportunities = queries.getOpportunitiesByUser(userId, selectedStatusIds);
             const statusColumns = queries.deriveStatusColumns(opportunities);
 
             const kanbanData = {
                 columns: statusColumns,
                 opportunities: opportunities,
-                userId: userId
+                userId: userId,
+                selectedStatusIds: selectedStatusIds
             };
 
             const clientFile = file.load({
@@ -27,10 +33,10 @@ define(['N/runtime', 'N/file', '../lib/queries'], (runtime, file, queries) => {
             });
             const clientUrl = clientFile.url;
 
-            portletObj.html = buildHtml(kanbanData, clientUrl);
+            portletObject.html = buildHtml(kanbanData, clientUrl);
         } catch (e) {
             log.error({ title: 'OpportunityKanban.render', details: e.message || e });
-            portletObj.html = '<div style="padding:20px;color:#c00;">Error loading kanban board. Check script logs.</div>';
+            portletObject.html = '<div style="padding:20px;color:#c00;">Error loading kanban board. Check script logs.</div>';
         }
     };
 

@@ -5,6 +5,28 @@
 define(['N/search'], (search) => {
 
     /**
+     * Normalizes an admin-entered status filter into valid NetSuite internal IDs.
+     *
+     * @param {string|Array<string|number>} value - Comma/whitespace-separated IDs or array of IDs
+     * @returns {Array<string>} Numeric internal IDs as strings
+     */
+    const normalizeStatusIds = (value) => {
+        const parts = Array.isArray(value) ? value : String(value || '').split(/[,\s]+/);
+        const seen = {};
+        const statusIds = [];
+
+        parts.forEach((part) => {
+            const statusId = String(part || '').trim();
+            if (/^\d+$/.test(statusId) && !seen[statusId]) {
+                seen[statusId] = true;
+                statusIds.push(statusId);
+            }
+        });
+
+        return statusIds;
+    };
+
+    /**
      * Derives unique status columns from an array of opportunities.
      * Only returns statuses that have actual opportunities — no empty columns.
      *
@@ -35,16 +57,23 @@ define(['N/search'], (search) => {
      * Fetches all opportunities assigned to a given sales rep.
      *
      * @param {number|string} userId - Internal ID of the sales rep
+     * @param {Array<string|number>} [statusIds] - Optional Opportunity status internal IDs
      * @returns {Array<Object>} Array of opportunity objects
      */
-    const getOpportunitiesByUser = (userId) => {
+    const getOpportunitiesByUser = (userId, statusIds) => {
         const opportunities = [];
+        const normalizedStatusIds = normalizeStatusIds(statusIds);
+        const filters = [
+            ['salesrep', 'anyof', userId]
+        ];
+
+        if (normalizedStatusIds.length > 0) {
+            filters.push('AND', ['entitystatus', 'anyof', normalizedStatusIds]);
+        }
 
         const oppSearch = search.create({
             type: search.Type.OPPORTUNITY,
-            filters: [
-                ['salesrep', 'anyof', userId]
-            ],
+            filters: filters,
             columns: [
                 search.createColumn({ name: 'tranid' }),
                 search.createColumn({ name: 'entity' }),
@@ -76,9 +105,12 @@ define(['N/search'], (search) => {
             return true;
         });
 
-        log.debug({ title: 'getOpportunitiesByUser', details: `Found ${opportunities.length} opportunities for user ${userId}` });
+        log.debug({
+            title: 'getOpportunitiesByUser',
+            details: `Found ${opportunities.length} opportunities for user ${userId}`
+        });
         return opportunities;
     };
 
-    return { deriveStatusColumns, getOpportunitiesByUser };
+    return { deriveStatusColumns, getOpportunitiesByUser, normalizeStatusIds };
 });
