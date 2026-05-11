@@ -12,7 +12,7 @@ A NetSuite SuiteApp that renders a kanban board portlet on dashboards, giving sa
 >
 > This project is provided for educational and demonstration purposes only. The code is not certified for quality, security, correctness, or production readiness. Review, test, secure, and validate it in your own NetSuite account before relying on it.
 
-![oppkanban](https://github.com/user-attachments/assets/b11ba2e7-12f2-4a68-88d1-91d1dc8b87f9)
+<img width="3012" height="1348" alt="oppkanban" src="https://github.com/user-attachments/assets/5df79493-5884-46b1-aa94-8797b5167286" />
 
 ## Optional Status Filter
 
@@ -28,6 +28,7 @@ Example values:
 ```text
 6,7,8
 ```
+<img width="3320" height="1278" alt="oppstatusfilter" src="https://github.com/user-attachments/assets/cce7e1da-d064-48d4-aca7-0fd3a417b4d3" />
 
 Leave the field blank to show all statuses. Use internal IDs, not status names; IDs can vary by NetSuite account, so this SuiteApp ships with the parameter blank.
 
