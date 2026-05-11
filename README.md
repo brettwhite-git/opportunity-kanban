@@ -8,14 +8,28 @@
 
 A NetSuite SuiteApp that renders a kanban board portlet on dashboards, giving sales reps a visual pipeline of their opportunities organized by status columns.
 
-![oppkanban](https://github.com/user-attachments/assets/b11ba2e7-12f2-4a68-88d1-91d1dc8b87f9)
-
-## Educational Use Disclaimer
-
 > **Educational use only**
 >
 > This project is provided for educational and demonstration purposes only. The code is not certified for quality, security, correctness, or production readiness. Review, test, secure, and validate it in your own NetSuite account before relying on it.
 
+![oppkanban](https://github.com/user-attachments/assets/b11ba2e7-12f2-4a68-88d1-91d1dc8b87f9)
+
+## Optional Status Filter
+
+By default, the portlet shows every Opportunity status found in the current user's opportunities. To limit the board to specific statuses for a deployment, set the **Opportunity Status Filter** script parameter after deployment:
+
+1. In NetSuite, go to **Customization > Scripting > Script Deployments**
+2. Open the **Opportunity Kanban Board** deployment
+3. On **Parameters**, set **Opportunity Status Filter** to comma-separated Opportunity status internal IDs
+4. Save the deployment and reload the dashboard portlet
+
+Example values:
+
+```text
+6,7,8
+```
+
+Leave the field blank to show all statuses. Use internal IDs, not status names; IDs can vary by NetSuite account, so this SuiteApp ships with the parameter blank.
 
 ## Features
 
@@ -63,33 +77,17 @@ Authenticate with NetSuite using whichever SuiteCloud SDK flow fits your environ
 - Existing local SuiteCloud auth IDs
 - CI credentials for automated validation or deployment
 
-The npm scripts in this repo call the SuiteCloud CLI and use the authentication context you have already configured locally.
+The SuiteCloud commands use the authentication context you have already configured locally.
 
 ### Deploy
 
 ```bash
-npm run validate    # Validate project structure
-npm run deploy      # Deploy to NetSuite
+suitecloud project:validate           # Validate project structure
+suitecloud project:deploy --validate  # Validate deployment without deploying
+suitecloud project:deploy             # Deploy to NetSuite
 ```
 
 After deploying, add the **Opportunity Kanban** portlet to any dashboard via **Personalize Dashboard > Custom Portlets**.
-
-### Optional Status Filter
-
-By default, the portlet shows every Opportunity status found in the current user's opportunities. To limit the board to specific statuses for a deployment, set the **Opportunity Status Filter** script parameter after deployment:
-
-1. In NetSuite, go to **Customization > Scripting > Script Deployments**
-2. Open the **Opportunity Kanban Board** deployment
-3. On **Parameters**, set **Opportunity Status Filter** to comma-separated Opportunity status internal IDs
-4. Save the deployment and reload the dashboard portlet
-
-Example values:
-
-```text
-6,7,8
-```
-
-Leave the field blank to show all statuses. Use internal IDs, not status names; IDs can vary by NetSuite account, so this SuiteApp ships with the parameter blank.
 
 ## Project Structure
 
@@ -126,21 +124,6 @@ npm run test:watch    # Watch mode
 npm run lint          # Check for issues
 npm run lint:fix      # Auto-fix
 ```
-
-## Architecture
-
-This portlet uses a **hybrid delivery pattern** to work within NetSuite's portlet sandbox:
-
-1. **Inline CSS** — `<style>` blocks render correctly inside portlets
-2. **Small inline data script** — Injects `window.KANBAN_DATA` with serialized opportunity data
-3. **External JS file** — `kanban-client.js` loaded via `<script src>` handles all DOM construction
-
-This approach is necessary because NetSuite renders portlets inside an iframe, executes scripts there, then extracts the raw HTML into the main page — destroying all JavaScript references. Only HTML attributes (`onclick`, `href`, `data-*`) and CSS survive this process. All interactive elements use self-contained `onclick` strings with only built-in DOM APIs.
-
-## Roadmap
-
-- [x] Phase 1 — Read-only kanban board with filtering and click-through
-- [ ] Phase 2 — Drag-and-drop status updates via HTML5 native DnD API
 
 ## License
 
