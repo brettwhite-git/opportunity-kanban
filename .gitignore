@@ -37,3 +37,6 @@ compound-engineering.local.md
 archive/
 CHANGELOG.md
 CLAUDE.md
+docs/
+tasks/
+__tests__/
