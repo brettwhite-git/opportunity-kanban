@@ -9,7 +9,7 @@
     <scriptcustomfield scriptid="custscript_opp_kanban_status_ids">
       <fieldtype>TEXTAREA</fieldtype>
       <label>Opportunity Status Filter</label>
-      <description>Optional comma-separated Opportunity status internal IDs. Leave blank to show all statuses.</description>
+      <description>Comma-separated Opportunity status internal IDs for pipeline columns (empty columns shown). Leave blank to show only statuses that have opportunities.</description>
       <displayheight>3</displayheight>
       <displaywidth>60</displaywidth>
       <storevalue>T</storevalue>

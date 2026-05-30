@@ -33,6 +33,35 @@ define(['N/search'], (search) => {
      * @param {Array<Object>} opportunities - Array from getOpportunitiesByUser()
      * @returns {Array<{id: string, name: string}>}
      */
+
+    /**
+     * Builds kanban columns from deployment status IDs when configured; otherwise
+     * derives columns from opportunities that have data.
+     *
+     * @param {Array<string>} statusIds - Normalized status internal IDs from script param
+     * @param {Array<Object>} opportunities - Array from getOpportunitiesByUser()
+     * @returns {Array<{id: string, name: string}>}
+     */
+    const buildStatusColumns = (statusIds, opportunities) => {
+        if (!statusIds || statusIds.length === 0) {
+            return deriveStatusColumns(opportunities);
+        }
+
+        const nameById = {};
+        opportunities.forEach((opp) => {
+            const statusId = String(opp.entitystatus || '');
+            if (statusId && opp.entitystatusText) {
+                nameById[statusId] = opp.entitystatusText;
+            }
+        });
+
+        const sortedIds = statusIds.slice().sort((a, b) => parseInt(a, 10) - parseInt(b, 10));
+        return sortedIds.map((statusId) => ({
+            id: statusId,
+            name: nameById[statusId] || ('Status ' + statusId)
+        }));
+    };
+
     const deriveStatusColumns = (opportunities) => {
         const seen = {};
         const columns = [];
@@ -112,5 +141,10 @@ define(['N/search'], (search) => {
         return opportunities;
     };
 
-    return { deriveStatusColumns, getOpportunitiesByUser, normalizeStatusIds };
+    return {
+        buildStatusColumns,
+        deriveStatusColumns,
+        getOpportunitiesByUser,
+        normalizeStatusIds
+    };
 });
