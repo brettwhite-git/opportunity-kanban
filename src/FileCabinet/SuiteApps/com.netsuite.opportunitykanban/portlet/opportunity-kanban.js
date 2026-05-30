@@ -3,7 +3,7 @@
  * @NScriptType Portlet
  * @NModuleScope SameAccount
  */
-define(['N/runtime', 'N/file', '../lib/queries'], (runtime, file, queries) => {
+define(['N/runtime', 'N/file', 'N/url', '../lib/queries'], (runtime, file, url, queries) => {
 
     const render = (params) => {
         const portletObject = params.portlet;
@@ -19,13 +19,20 @@ define(['N/runtime', 'N/file', '../lib/queries'], (runtime, file, queries) => {
             );
 
             const opportunities = queries.getOpportunitiesByUser(userId, selectedStatusIds);
-            const statusColumns = queries.deriveStatusColumns(opportunities);
+            const statusColumns = queries.buildStatusColumns(selectedStatusIds, opportunities);
+            const updateUrl = url.resolveScript({
+                scriptId: 'customscript_opp_kanban_update',
+                deploymentId: 'customdeploy_opp_kanban_update',
+                returnExternalUrl: false
+            });
 
             const kanbanData = {
                 columns: statusColumns,
                 opportunities: opportunities,
                 userId: userId,
-                selectedStatusIds: selectedStatusIds
+                selectedStatusIds: selectedStatusIds,
+                allowedStatusIds: selectedStatusIds,
+                updateUrl: updateUrl
             };
 
             const clientFile = file.load({
@@ -61,6 +68,66 @@ define(['N/runtime', 'N/file', '../lib/queries'], (runtime, file, queries) => {
     font-family: "Oracle Sans", "Helvetica Neue", -apple-system, BlinkMacSystemFont, sans-serif;
     font-size: 13px;
     color: #333;
+    position: relative;
+}
+
+.kanban-board-backdrop {
+    display: none;
+    position: fixed;
+    inset: 0;
+    z-index: 99999;
+    background: rgba(22, 21, 19, 0.28);
+    pointer-events: auto;
+}
+
+.kanban-expand-btn {
+    padding: 4px 12px;
+    border: 1px solid #ccc;
+    border-radius: 3px;
+    font-size: 12px;
+    font-weight: 600;
+    background: #fff;
+    color: #555;
+    cursor: pointer;
+    line-height: 1.4;
+    user-select: none;
+    -webkit-user-select: none;
+    flex-shrink: 0;
+}
+
+.kanban-expand-btn:hover {
+    background: #f0f0f0;
+    border-color: #999;
+}
+
+.kanban-expand-btn:focus {
+    outline: 2px solid #325c72;
+    outline-offset: 1px;
+}
+
+#kanban-board-container.kanban-board-expanded {
+    position: fixed;
+    top: 28px;
+    right: 28px;
+    bottom: 28px;
+    left: 28px;
+    z-index: 100000;
+    background: #fff;
+    border-radius: 8px;
+    box-shadow: 0 12px 40px rgba(22, 21, 19, 0.22);
+    overflow: auto;
+    padding: 16px 20px 24px;
+    box-sizing: border-box;
+}
+
+#kanban-board-container.kanban-board-expanded .kanban-columns {
+    min-height: calc(100vh - 260px);
+    max-height: none;
+}
+
+#kanban-board-container.kanban-board-expanded .kanban-column {
+    max-height: calc(100vh - 280px);
+    flex: 0 0 260px;
 }
 
 .kanban-toolbar {
@@ -68,7 +135,16 @@ define(['N/runtime', 'N/file', '../lib/queries'], (runtime, file, queries) => {
     margin-bottom: 8px;
     display: flex;
     align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+}
+
+.kanban-toolbar-filters {
+    display: flex;
+    align-items: center;
     gap: 4px;
+    flex-wrap: wrap;
+    min-width: 0;
 }
 
 .kanban-filter-btn {
@@ -263,6 +339,22 @@ define(['N/runtime', 'N/file', '../lib/queries'], (runtime, file, queries) => {
     margin: 0 0 8px;
     overflow: hidden;
     text-overflow: ellipsis;
+}
+
+
+.kanban-card[draggable="true"] {
+    cursor: grab;
+}
+
+.kanban-card.kanban-card-dragging {
+    opacity: 0.55;
+    cursor: grabbing;
+}
+
+.kanban-column-body.kanban-drop-hover {
+    background: rgba(50, 92, 114, 0.08);
+    outline: 2px dashed #325c72;
+    outline-offset: -2px;
 }
 
 .kanban-kpi-value {

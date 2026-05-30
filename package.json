@@ -1,7 +1,7 @@
 {
   "name": "opportunity-kanban",
   "version": "2.0.0",
-  "description": "NetSuite Opportunity Kanban Board Portlet - Drag-and-drop sales pipeline visualization",
+  "description": "NetSuite Opportunity Kanban Board Portlet - drag-and-drop status updates with Suitelet persistence",
   "scripts": {
     "validate": "suitecloud project:validate",
     "deploy": "suitecloud project:deploy",

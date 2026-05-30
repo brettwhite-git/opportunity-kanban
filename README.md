@@ -2,7 +2,7 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
 [![SuiteScript 2.1](https://img.shields.io/badge/SuiteScript-2.1-orange.svg)](https://docs.oracle.com/en/cloud/saas/netsuite/ns-online-help/chapter_4387172221.html)
-[![Tests: 50 passing](https://img.shields.io/badge/tests-50%20passing-brightgreen.svg)](#development)
+[![Tests: 67 passing](https://img.shields.io/badge/tests-67%20passing-brightgreen.svg)](#development)
 [![ESLint](https://img.shields.io/badge/linting-ESLint-purple.svg)](#development)
 [![SuiteCloud CLI v3](https://img.shields.io/badge/SuiteCloud_CLI-v3.1.2-lightgrey.svg)](https://github.com/nicholasglesmann/sdf-cli-gem)
 
@@ -28,17 +28,20 @@ Example internal ID values:
 ```text
 6,7,8,9 
 ```
-Leave the field blank to show all statuses. Use internal IDs, not status names; IDs can vary by NetSuite account, so this SuiteApp ships with the parameter blank.
+Leave the field blank to derive columns from the user's opportunities only (no empty columns). Set the parameter to define a fixed pipeline with empty drop zones. Use internal IDs, not status names; IDs can vary by NetSuite account, so this SuiteApp ships with the parameter blank.
 
 <img width="3320" height="1278" alt="oppstatusfilter" src="https://github.com/user-attachments/assets/cce7e1da-d064-48d4-aca7-0fd3a417b4d3" />
 
 ## Features
 
 - **Kanban board view** — Opportunities displayed as cards in status columns (Proposal, Negotiation, Closed Won, etc.)
+- **Drag-and-drop status updates** — Move cards between columns; changes persist via a Suitelet (`entitystatus` on the opportunity)
 - **Inclusive date filters** — This Month, This Quarter, Next Quarter, Last Quarter (a deal closing this month also appears under This Quarter)
 - **Click-through navigation** — Click any card to open the full opportunity record; click the transaction ID to open in a new tab
-- **Auto-derived columns** — Status columns are built dynamically from your actual data, no configuration needed
-- **Optional status filter** — Admins can limit the board to selected Opportunity statuses from the script deployment record
+- **Pipeline columns from script parameter** — When **Opportunity Status Filter** is set, the board shows exactly those statuses (including empty columns as drop targets)
+- **Auto-derived columns when unconfigured** — If the parameter is blank, columns are built from statuses that have opportunities for the current user
+- **Optional status filter** — Same parameter also limits which opportunities are loaded in search
+- **Expand board overlay** — Toolbar expand opens a margined modal with dimmed dashboard behind for full-pipeline visibility
 - **Currency formatting** — Projected totals shown as $150K, $2.5M, etc.
 - **Portlet-safe architecture** — Built to survive NetSuite's iframe extraction process using self-contained onclick handlers
 

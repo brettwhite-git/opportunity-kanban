@@ -1,0 +1,17 @@
+<suitelet scriptid="customscript_opp_kanban_update">
+  <name>Opportunity Kanban Status Update</name>
+  <scriptfile>[/SuiteApps/com.netsuite.opportunitykanban/suitelet/update-opportunity-status.js]</scriptfile>
+  <notifyowner>F</notifyowner>
+  <description>AJAX endpoint for Opportunity Kanban drag-and-drop status changes</description>
+  <isinactive>F</isinactive>
+  <scriptdeployments>
+    <scriptdeployment scriptid="customdeploy_opp_kanban_update">
+      <allemployees>T</allemployees>
+      <allroles>T</allroles>
+      <isdeployed>T</isdeployed>
+      <loglevel>ERROR</loglevel>
+      <status>RELEASED</status>
+      <title>Opportunity Kanban Status Update</title>
+    </scriptdeployment>
+  </scriptdeployments>
+</suitelet>
