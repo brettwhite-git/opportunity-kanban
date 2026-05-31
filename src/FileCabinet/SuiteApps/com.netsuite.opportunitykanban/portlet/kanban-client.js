@@ -302,15 +302,115 @@
         return parts[1] + '/' + parts[2] + '/' + parts[0];
     }
 
-    function scrollActivePeriodListIntoViewBody() {
+    /** NetSuite portlet HTML extraction preserves attributes, not .checked properties. */
+    function setPeriodCheckboxChecked(checkbox, checked) {
+        checkbox.checked = !!checked;
+        if (checked) {
+            checkbox.setAttribute('checked', 'checked');
+        } else {
+            checkbox.removeAttribute('checked');
+        }
+    }
+
+    function syncPeriodCheckboxAttributesForGroup(group) {
+        var cbs = document.querySelectorAll('.kanban-period-cb[data-period-group="' + group + '"]');
+        for (var i = 0; i < cbs.length; i++) {
+            if (cbs[i].checked) {
+                cbs[i].setAttribute('checked', 'checked');
+            } else {
+                cbs[i].removeAttribute('checked');
+            }
+        }
+    }
+
+    function syncAllPeriodCheckboxAttributes() {
+        syncPeriodCheckboxAttributesForGroup('acct');
+        syncPeriodCheckboxAttributesForGroup('quarter');
+    }
+
+    function syncAllPeriodCheckboxAttributesBody() {
+        return "var syncGrps=['acct','quarter'];for(var gi=0;gi<syncGrps.length;gi++){" +
+            "var syncCbs=document.querySelectorAll('.kanban-period-cb[data-period-group=\"'+syncGrps[gi]+'\"]');" +
+            "for(var si=0;si<syncCbs.length;si++){if(syncCbs[si].checked){syncCbs[si].setAttribute('checked','checked');}" +
+            "else{syncCbs[si].removeAttribute('checked');}}}";
+    }
+
+    function preparePeriodPanelOnOpenBody() {
+        return ensureDefaultPeriodsCheckedBody() + syncAllPeriodCheckboxAttributesBody();
+    }
+
+    function findTargetPeriodCheckbox(list, mv) {
+        var root = document.getElementById('kanban-board-container');
+        var defCsv = root
+            ? (mv === 'quarter'
+                ? (root.getAttribute('data-default-quarter-periods') || '')
+                : (root.getAttribute('data-default-acct-periods') || ''))
+            : '';
+        var defs = defCsv ? defCsv.split(',') : [];
+        var cb = null;
+        var j;
+        var pid;
+        var checked;
+        var i;
+        for (j = defs.length - 1; j >= 0; j--) {
+            if (!defs[j]) continue;
+            cb = list.querySelector('.kanban-period-cb[data-period-id="' + defs[j] + '"]');
+            if (cb) return cb;
+        }
+        checked = list.querySelectorAll('.kanban-period-cb:checked');
+        for (i = 0; i < checked.length; i++) {
+            pid = checked[i].getAttribute('data-period-id') || '';
+            for (j = 0; j < defs.length; j++) {
+                if (defs[j] && defs[j] === pid) {
+                    return checked[i];
+                }
+            }
+        }
+        if (checked.length) {
+            return checked[checked.length - 1];
+        }
+        return list.querySelector('.kanban-period-cb:checked');
+    }
+
+    function scrollPeriodListToCheckedRow(list, mv) {
+        var listHeight = list.clientHeight || list.offsetHeight;
+        if (listHeight < 1) return false;
+        var cb = findTargetPeriodCheckbox(list, mv);
+        if (!cb || !cb.parentElement) return false;
+        var row = cb.parentElement;
+        var top = row.offsetTop - (listHeight - row.offsetHeight) / 2;
+        list.scrollTop = top > 0 ? top : 0;
+        return true;
+    }
+
+    function schedulePeriodListScrollBody() {
         return "var modeEl=document.getElementById('kanban-filter-mode');var mv=modeEl?modeEl.value:'acct';" +
             "if(mv==='range')return;" +
             "var listId=mv==='quarter'?'kanban-filter-quarter-list':'kanban-filter-acct-list';" +
             "var list=document.getElementById(listId);if(!list)return;" +
-            "var cb=list.querySelector('.kanban-period-cb:checked');" +
+            "var scrollTry=0;" +
+            "var scrollTick=function(){" +
+            "var listH=list.clientHeight||list.offsetHeight;" +
+            "if(listH<1&&scrollTry<12){scrollTry++;setTimeout(scrollTick,20);return;}" +
+            "var root=document.getElementById('kanban-board-container');" +
+            "var defCsv=root?(mv==='quarter'?root.getAttribute('data-default-quarter-periods')||'':root.getAttribute('data-default-acct-periods')||''):'';" +
+            "var defs=defCsv?defCsv.split(','):[];" +
+            "var cb=null;var pj,rid,si,pid;" +
+            "for(pj=defs.length-1;pj>=0;pj--){if(!defs[pj])continue;rid=defs[pj];" +
+            "cb=list.querySelector('.kanban-period-cb[data-period-id=\"'+rid+'\"]');if(cb)break;}" +
+            "if(!cb){var checked=list.querySelectorAll('.kanban-period-cb:checked');" +
+            "for(si=0;si<checked.length;si++){pid=checked[si].getAttribute('data-period-id')||'';" +
+            "for(pj=0;pj<defs.length;pj++){if(defs[pj]&&defs[pj]===pid){cb=checked[si];break;}}if(cb)break;}" +
+            "if(!cb&&checked.length)cb=checked[checked.length-1];}" +
+            "if(!cb)cb=list.querySelector('.kanban-period-cb:checked');" +
             "if(!cb||!cb.parentElement)return;" +
-            "try{cb.parentElement.scrollIntoView({block:'nearest'});}catch(scEx){" +
-            "var row=cb.parentElement;list.scrollTop=Math.max(0,row.offsetTop-list.offsetTop);}";
+            "var row=cb.parentElement;var top=row.offsetTop-(listH-row.offsetHeight)/2;" +
+            "list.scrollTop=top>0?top:0;};" +
+            "setTimeout(scrollTick,0);";
+    }
+
+    function scrollActivePeriodListIntoViewBody() {
+        return schedulePeriodListScrollBody();
     }
 
     function applyDefaultRangeDatesBody(forceAssign) {
@@ -355,7 +455,8 @@
             "var any=false;for(var di=0;di<cbs.length;di++){if(cbs[di].checked){any=true;break;}}" +
             "if(!any){for(var dj=0;dj<cbs.length;dj++){" +
             "var pid=cbs[dj].getAttribute('data-period-id')||'';" +
-            "for(var dk=0;dk<defs.length;dk++){if(defs[dk]&&defs[dk]===pid){cbs[dj].checked=true;break;}}}}}";
+            "for(var dk=0;dk<defs.length;dk++){if(defs[dk]&&defs[dk]===pid){cbs[dj].checked=true;" +
+            "cbs[dj].setAttribute('checked','checked');break;}}}}}";
     }
 
     function ensureDefaultPeriodsChecked() {
@@ -380,7 +481,7 @@
             var periodId = checkboxes[j].getAttribute('data-period-id') || '';
             for (var k = 0; k < defs.length; k++) {
                 if (defs[k] === periodId) {
-                    checkboxes[j].checked = true;
+                    setPeriodCheckboxChecked(checkboxes[j], true);
                     break;
                 }
             }
@@ -439,7 +540,8 @@
             "if(show&&q){var st=cards[i].getAttribute('data-search-text')||'';if(st.indexOf(q)<0)show=false;}" +
             "cards[i].style.display=show?'':'none';}" +
             updateFilterChipLabelBody() +
-            filterColumnKpiTail(hideEmptyCols);
+            filterColumnKpiTail(hideEmptyCols) +
+            syncAllPeriodCheckboxAttributesBody();
     }
 
     function makeApplyFiltersTriggerOnclick() {
@@ -468,10 +570,11 @@
             "var defCsv=mv==='quarter'?'" + quarterCsv + "':'" + acctCsv + "';" +
             "var defs=defCsv?defCsv.split(','):[];" +
             "var cbs=document.querySelectorAll('.kanban-period-cb[data-period-group='+grp+']');" +
-            "for(var xi=0;xi<cbs.length;xi++){cbs[xi].checked=false;}" +
+            "for(var xi=0;xi<cbs.length;xi++){cbs[xi].checked=false;cbs[xi].removeAttribute('checked');}" +
             "for(var xj=0;xj<cbs.length;xj++){" +
             "var pid=cbs[xj].getAttribute('data-period-id')||'';" +
-            "for(var xk=0;xk<defs.length;xk++){if(defs[xk]&&defs[xk]===pid){cbs[xj].checked=true;break;}}}" +
+            "for(var xk=0;xk<defs.length;xk++){if(defs[xk]&&defs[xk]===pid){cbs[xj].checked=true;" +
+            "cbs[xj].setAttribute('checked','checked');break;}}}" +
             "}" +
             inlineClickApplyHook();
     }
@@ -491,7 +594,8 @@
             "var p=document.getElementById('" + pid + "');if(!p)return;" +
             "var open=p.style.display!=='none';" +
             closeAllPeriodPanelsBody() +
-            "if(!open){p.style.display='block';" + scrollActivePeriodListIntoViewBody() + "}";
+            "if(!open){p.style.display='block';" + preparePeriodPanelOnOpenBody() +
+            scrollActivePeriodListIntoViewBody() + "}";
     }
 
     function makeClosePeriodPanelsOnclick() {
@@ -514,13 +618,13 @@
             var defs = mv === 'quarter' ? defaultQuarterIds : defaultAcctIds;
             var checkboxes = document.querySelectorAll('.kanban-period-cb[data-period-group="' + group + '"]');
             for (var i = 0; i < checkboxes.length; i++) {
-                checkboxes[i].checked = false;
+                setPeriodCheckboxChecked(checkboxes[i], false);
             }
             for (var j = 0; j < checkboxes.length; j++) {
                 var periodId = checkboxes[j].getAttribute('data-period-id') || '';
                 for (var k = 0; k < defs.length; k++) {
                     if (defs[k] && defs[k] === periodId) {
-                        checkboxes[j].checked = true;
+                        setPeriodCheckboxChecked(checkboxes[j], true);
                         break;
                     }
                 }
@@ -536,14 +640,15 @@
         var listId = mv === 'quarter' ? 'kanban-filter-quarter-list' : 'kanban-filter-acct-list';
         var list = document.getElementById(listId);
         if (!list) return;
-        var cb = list.querySelector('.kanban-period-cb:checked');
-        if (!cb || !cb.parentElement) return;
-        try {
-            cb.parentElement.scrollIntoView({ block: 'nearest' });
-        } catch (scEx) {
-            var row = cb.parentElement;
-            list.scrollTop = Math.max(0, row.offsetTop - list.offsetTop);
+        var attempts = 0;
+        function tryScroll() {
+            if (scrollPeriodListToCheckedRow(list, mv)) return;
+            if (attempts < 12) {
+                attempts += 1;
+                setTimeout(tryScroll, 20);
+            }
         }
+        setTimeout(tryScroll, 0);
     }
 
     function applyDefaultRangeDates(forceAssign) {
@@ -656,6 +761,8 @@
         closeAllPeriodPanels();
         if (!open) {
             panel.style.display = 'block';
+            ensureDefaultPeriodsChecked();
+            syncAllPeriodCheckboxAttributes();
             scrollActivePeriodListIntoView();
         }
     }
@@ -725,6 +832,7 @@
         updateFilterChipLabel();
         applyColumnVisibility(hideEmptyCols);
         updateKpis();
+        syncAllPeriodCheckboxAttributes();
     }
 
     function applyColumnVisibility(hideEmptyCols) {
@@ -755,7 +863,7 @@
             checkbox.setAttribute('data-period-id', period.id);
             checkbox.setAttribute('data-start', period.startIso);
             checkbox.setAttribute('data-end', period.endIso);
-            checkbox.checked = defaultIds.indexOf(period.id) >= 0;
+            setPeriodCheckboxChecked(checkbox, defaultIds.indexOf(period.id) >= 0);
             checkbox.setAttribute('onclick', makeApplyFiltersTriggerOnclick());
 
             row.appendChild(checkbox);

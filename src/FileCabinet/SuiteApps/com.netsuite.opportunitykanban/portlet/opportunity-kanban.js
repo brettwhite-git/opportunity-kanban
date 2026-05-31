@@ -123,7 +123,11 @@ define(['N/runtime', 'N/file', 'N/url', '../lib/queries'], (runtime, file, url, 
 }
 
 .kanban-expand-btn:focus {
-    outline: 2px solid #325c72;
+    outline: none;
+}
+
+.kanban-expand-btn:focus-visible {
+    outline: 2px solid #999;
     outline-offset: 1px;
 }
 
@@ -209,19 +213,23 @@ define(['N/runtime', 'N/file', 'N/url', '../lib/queries'], (runtime, file, url, 
 }
 
 .kanban-filter-chip:focus {
-    outline: 2px solid #325c72;
+    outline: none;
+}
+
+.kanban-filter-chip:focus-visible {
+    outline: 2px solid #999;
     outline-offset: 1px;
 }
 
 .kanban-filter-chip.active {
     background: #325c72;
-    border-color: #325c72;
+    border-color: #ccc;
     color: #fff;
 }
 
 .kanban-filter-chip.active:hover {
     background: #2a4f61;
-    border-color: #2a4f61;
+    border-color: #999;
 }
 
 .kanban-filter-chip-label {
@@ -229,14 +237,15 @@ define(['N/runtime', 'N/file', 'N/url', '../lib/queries'], (runtime, file, url, 
 }
 
 .kanban-filter-chip-sep {
+    align-self: stretch;
     margin: 0 8px;
     padding-left: 8px;
-    border-left: 1px solid rgba(22, 21, 19, 0.2);
+    border-left: 1px solid #d3d3d3;
     flex-shrink: 0;
 }
 
 .kanban-filter-chip.active .kanban-filter-chip-sep {
-    border-left-color: rgba(255, 255, 255, 0.45);
+    border-left-color: rgba(255, 255, 255, 0.5);
 }
 
 .kanban-filter-chip-value {
@@ -274,13 +283,22 @@ define(['N/runtime', 'N/file', 'N/url', '../lib/queries'], (runtime, file, url, 
 
 .kanban-filter-chip-wrap.has-clear.active .kanban-filter-chip-clear {
     background: #325c72;
-    border-color: #325c72;
+    border-color: #ccc;
     color: #fff;
 }
 
 .kanban-filter-chip-wrap.has-clear.active .kanban-filter-chip-clear:hover {
     background: #2a4f61;
-    border-color: #2a4f61;
+    border-color: #999;
+}
+
+.kanban-filter-chip-clear:focus {
+    outline: none;
+}
+
+.kanban-filter-chip-clear:focus-visible {
+    outline: 2px solid #999;
+    outline-offset: 1px;
 }
 
 .kanban-filter-chip-wrap:not(.has-clear) .kanban-filter-chip {
@@ -289,7 +307,7 @@ define(['N/runtime', 'N/file', 'N/url', '../lib/queries'], (runtime, file, url, 
 }
 
 .kanban-filter-chip-wrap:not(.has-clear) .kanban-filter-chip.active {
-    border-right-color: #325c72;
+    border-right-color: #ccc;
 }
 
 .kanban-period-panel,

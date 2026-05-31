@@ -925,14 +925,58 @@ describe('filter chip UX', () => {
         expect(document.querySelector('.kanban-period-cb[data-period-group="acct"]:checked')).toBeTruthy();
     });
 
+    it('sets checked attribute on default accounting period at build', () => {
+        window.KANBAN_DATA = makeSampleData();
+        loadClient();
+        const defaultCb = document.querySelector(
+            '.kanban-period-cb[data-period-group="acct"][data-period-id="m2"]'
+        );
+        expect(defaultCb.checked).toBe(true);
+        expect(defaultCb.hasAttribute('checked')).toBe(true);
+    });
+
+    it('shows checked attribute when filter panel opens on first click', () => {
+        jest.useFakeTimers();
+        window.KANBAN_DATA = makeSampleData();
+        loadClient();
+        const defaultCb = document.querySelector(
+            '.kanban-period-cb[data-period-group="acct"][data-period-id="m2"]'
+        );
+        defaultCb.removeAttribute('checked');
+        Object.defineProperty(defaultCb, 'clientHeight', {
+            configurable: true,
+            get() { return 160; }
+        });
+        const list = document.getElementById('kanban-filter-acct-list');
+        Object.defineProperty(list, 'clientHeight', {
+            configurable: true,
+            get() { return 160; }
+        });
+        fireHandler(document.getElementById('kanban-filter-trigger'), 'onclick');
+        jest.advanceTimersByTime(0);
+        expect(defaultCb.hasAttribute('checked')).toBe(true);
+        expect(defaultCb.checked).toBe(true);
+        jest.useRealTimers();
+    });
+
     it('scrolls checked period into view when filter panel opens', () => {
+        jest.useFakeTimers();
         window.KANBAN_DATA = makeSampleData();
         loadClient();
         const list = document.getElementById('kanban-filter-acct-list');
-        const checked = list.querySelector('.kanban-period-cb:checked');
-        const row = checked.parentElement;
-        row.scrollIntoView = jest.fn();
+        Object.defineProperty(list, 'clientHeight', {
+            configurable: true,
+            get() { return 160; }
+        });
+        let scrollTopSet = false;
+        Object.defineProperty(list, 'scrollTop', {
+            configurable: true,
+            get() { return 0; },
+            set() { scrollTopSet = true; }
+        });
         fireHandler(document.getElementById('kanban-filter-trigger'), 'onclick');
-        expect(row.scrollIntoView).toHaveBeenCalled();
+        jest.advanceTimersByTime(0);
+        expect(scrollTopSet).toBe(true);
+        jest.useRealTimers();
     });
 });
