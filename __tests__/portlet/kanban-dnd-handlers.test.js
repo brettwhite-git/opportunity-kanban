@@ -100,6 +100,8 @@ describe('kanban DnD inline handler strings', () => {
             const ondrop = body.getAttribute('ondrop');
             assertQuoteSafeHandler(ondrop, 'ondrop');
             expect(ondrop).toContain('fetch(');
+            expect(ondrop).toContain('closedAccountingRanges:closedRanges');
+            expect(ondrop).toContain("getAttribute('data-closed-ranges')");
             expect(ondrop).toContain("getAttribute('data-opp-id')===oid");
             expect(ondrop).not.toContain('querySelector(\'.kanban-card[data-opp-id');
             expect(ondrop).toContain("kanban-column-body.kanban-drop-hover");
@@ -133,14 +135,12 @@ describe('kanban DnD inline handler strings', () => {
             assertQuoteSafeHandler(body.getAttribute('ondragleave'), 'ondragleave');
         });
 
-        document.querySelectorAll('.kanban-filter-chip').forEach((btn) => {
-            var onclick = btn.getAttribute('onclick');
-            if (!onclick) return;
-            assertQuoteSafeHandler(onclick, 'filter onclick');
+        document.querySelectorAll('.kanban-period-cb').forEach((cb) => {
+            assertQuoteSafeHandler(cb.getAttribute('onclick'), 'period checkbox onclick');
         });
         assertQuoteSafeHandler(
-            document.querySelector('.kanban-filter-apply').getAttribute('onclick'),
-            'range apply onclick'
+            document.getElementById('kanban-date-end').getAttribute('onchange'),
+            'date range onchange'
         );
     });
 

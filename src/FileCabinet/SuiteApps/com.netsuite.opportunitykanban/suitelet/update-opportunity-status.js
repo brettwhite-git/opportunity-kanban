@@ -3,7 +3,7 @@
  * @NScriptType Suitelet
  * @NModuleScope SameAccount
  */
-define(['N/record', 'N/runtime'], (record, runtime) => {
+define(['N/record', 'N/runtime', '../lib/queries'], (record, runtime, queries) => {
 
     const writeJson = (response, payload) => {
         response.setHeader({ name: 'Content-Type', value: 'application/json' });
@@ -22,6 +22,29 @@ define(['N/record', 'N/runtime'], (record, runtime) => {
     };
 
     const isNumericId = (value) => /^\d+$/.test(String(value || '').trim());
+
+    const toIsoDate = (value) => {
+        if (!value) return '';
+        if (value instanceof Date && !isNaN(value.getTime())) {
+            const y = value.getFullYear();
+            const m = value.getMonth() + 1;
+            const d = value.getDate();
+            const mm = m < 10 ? '0' + m : String(m);
+            const dd = d < 10 ? '0' + d : String(d);
+            return y + '-' + mm + '-' + dd;
+        }
+        const str = String(value).trim();
+        if (/^\d{4}-\d{2}-\d{2}$/.test(str)) return str;
+        const parts = str.split('/');
+        if (parts.length !== 3) return '';
+        const month = parseInt(parts[0], 10);
+        const day = parseInt(parts[1], 10);
+        const year = parseInt(parts[2], 10);
+        if (!month || !day || !year) return '';
+        const mm = month < 10 ? '0' + month : String(month);
+        const dd = day < 10 ? '0' + day : String(day);
+        return year + '-' + mm + '-' + dd;
+    };
 
     const onRequest = (context) => {
         const { request, response } = context;
@@ -57,6 +80,16 @@ define(['N/record', 'N/runtime'], (record, runtime) => {
             const salesRepId = opp.getValue({ fieldId: 'salesrep' });
             if (String(salesRepId) !== String(currentUserId)) {
                 writeJson(response, { ok: false, error: 'You may only update your own opportunities' });
+                return;
+            }
+
+            const closeIso = toIsoDate(opp.getValue({ fieldId: 'expectedclosedate' }));
+            const closedRanges = queries.parseClosedAccountingRanges(body.closedAccountingRanges);
+            if (queries.isCloseDateInClosedPeriod(closeIso, closedRanges)) {
+                writeJson(response, {
+                    ok: false,
+                    error: 'This opportunity is in a closed accounting period and cannot be updated.'
+                });
                 return;
             }
 

@@ -188,3 +188,128 @@ describe('getOpportunitiesByUser', () => {
         );
     });
 });
+
+describe('getCloseDatePeriodFilters', () => {
+    it('splits accounting periods into month and quarter lists', () => {
+        mockSearchRun([
+            makeResult('10', {
+                periodname: 'Jan 2026',
+                startdate: '1/1/2026',
+                enddate: '1/31/2026',
+                isquarter: 'F',
+                isyear: 'F',
+                closed: 'F'
+            }),
+            makeResult('20', {
+                periodname: 'Q1 2026',
+                startdate: '1/1/2026',
+                enddate: '3/31/2026',
+                isquarter: 'T',
+                isyear: 'F',
+                closed: 'F'
+            })
+        ]);
+
+        const filters = queries.getCloseDatePeriodFilters();
+
+        expect(filters.accountingPeriods).toHaveLength(1);
+        expect(filters.accountingPeriods[0].name).toBe('Jan 2026');
+        expect(filters.accountingPeriods[0].startIso).toBe('2026-01-01');
+        expect(filters.accountingPeriods[0].closed).toBe(false);
+        expect(filters.quarterPeriods).toHaveLength(1);
+        expect(filters.quarterPeriods[0].name).toBe('Q1 2026');
+    });
+
+    it('exposes default range ISO from current accounting period', () => {
+        mockSearchRun([
+            makeResult('10', {
+                periodname: 'Mar 2026',
+                startdate: '3/1/2026',
+                enddate: '3/31/2026',
+                isquarter: 'F',
+                isyear: 'F',
+                closed: 'F'
+            })
+        ]);
+
+        const realDate = Date;
+        const mockDate = new Date('2026-03-15T12:00:00Z');
+        global.Date = jest.fn(() => mockDate);
+        global.Date.UTC = realDate.UTC;
+        global.Date.parse = realDate.parse;
+
+        const filters = queries.getCloseDatePeriodFilters();
+        global.Date = realDate;
+
+        expect(filters.defaultRangeStartIso).toBe('2026-03-01');
+        expect(filters.defaultRangeEndIso).toBe('2026-03-31');
+    });
+
+    it('builds closedAccountingRanges from closed month periods', () => {
+        mockSearchRun([
+            makeResult('10', {
+                periodname: 'Jan 2026',
+                startdate: '1/1/2026',
+                enddate: '1/31/2026',
+                isquarter: 'F',
+                isyear: 'F',
+                closed: 'T'
+            }),
+            makeResult('11', {
+                periodname: 'Feb 2026',
+                startdate: '2/1/2026',
+                enddate: '2/28/2026',
+                isquarter: 'F',
+                isyear: 'F',
+                closed: 'F'
+            })
+        ]);
+
+        const filters = queries.getCloseDatePeriodFilters();
+        expect(filters.closedAccountingRanges).toEqual([
+            { startIso: '2026-01-01', endIso: '2026-01-31' }
+        ]);
+    });
+});
+
+describe('parseClosedAccountingRanges', () => {
+    it('accepts valid ISO date ranges from the request body', () => {
+        const ranges = queries.parseClosedAccountingRanges([
+            { startIso: '2026-01-01', endIso: '2026-01-31' },
+            { startIso: '2026-02-01', endIso: '2026-02-28' }
+        ]);
+        expect(ranges).toHaveLength(2);
+        expect(ranges[0].startIso).toBe('2026-01-01');
+    });
+
+    it('rejects invalid shapes and reversed dates', () => {
+        expect(queries.parseClosedAccountingRanges(null)).toEqual([]);
+        expect(queries.parseClosedAccountingRanges([
+            { startIso: 'not-a-date', endIso: '2026-01-31' },
+            { startIso: '2026-03-01', endIso: '2026-02-01' },
+            'bad'
+        ])).toEqual([]);
+    });
+});
+
+describe('isCloseDateInClosedPeriod', () => {
+    it('returns true when close date falls in a closed range', () => {
+        const ranges = [{ startIso: '2026-01-01', endIso: '2026-01-31' }];
+        expect(queries.isCloseDateInClosedPeriod('2026-01-15', ranges)).toBe(true);
+        expect(queries.isCloseDateInClosedPeriod('2026-02-01', ranges)).toBe(false);
+    });
+});
+
+describe('markOpportunitiesInClosedPeriods', () => {
+    it('sets isInClosedPeriod on opportunities', () => {
+        const opps = [
+            { expectedclosedate: '1/15/2026' },
+            { expectedclosedate: '2/15/2026' }
+        ];
+        queries.markOpportunitiesInClosedPeriods(opps, [
+            { startIso: '2026-01-01', endIso: '2026-01-31' }
+        ]);
+        expect(opps[0].isInClosedPeriod).toBe(true);
+        expect(opps[1].isInClosedPeriod).toBe(false);
+    });
+});

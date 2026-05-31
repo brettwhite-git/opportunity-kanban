@@ -8,7 +8,18 @@ import file from 'N/file';
 jest.mock('SuiteScripts/lib/queries', () => ({
     buildStatusColumns: jest.fn(),
     deriveStatusColumns: jest.fn(),
+    emptyCloseDatePeriodFilters: jest.fn(() => ({
+        accountingPeriods: [],
+        quarterPeriods: [],
+        defaultAccountingPeriodIds: [],
+        defaultQuarterPeriodIds: [],
+        defaultRangeStartIso: '',
+        defaultRangeEndIso: '',
+        closedAccountingRanges: []
+    })),
+    getCloseDatePeriodFilters: jest.fn(),
     getOpportunitiesByUser: jest.fn(),
+    markOpportunitiesInClosedPeriods: jest.fn((opportunities) => opportunities),
     normalizeStatusIds: jest.fn()
 }));
 
@@ -38,6 +49,15 @@ beforeEach(() => {
         { id: '6', name: 'Proposal' }
     ]);
     queries.normalizeStatusIds.mockReturnValue([]);
+    queries.getCloseDatePeriodFilters.mockReturnValue({
+        accountingPeriods: [],
+        quarterPeriods: [],
+        defaultAccountingPeriodIds: [],
+        defaultQuarterPeriodIds: [],
+        defaultRangeStartIso: '',
+        defaultRangeEndIso: '',
+        closedAccountingRanges: []
+    });
 });
 
 describe('opportunity-kanban portlet', () => {

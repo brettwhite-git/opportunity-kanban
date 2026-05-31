@@ -70,6 +70,27 @@
         return !!(data.selectedStatusIds && data.selectedStatusIds.length);
     }
 
+    /** Survives portlet iframe extraction — no external function references. */
+    function inlineStopPropagation() {
+        return "var evt=typeof event!=='undefined'?event:null;" +
+            "if(evt&&evt.stopPropagation)evt.stopPropagation();";
+    }
+
+    function inlineClickApplyHook() {
+        return "var h=document.getElementById('kanban-filter-apply-hook');if(h)h.click();";
+    }
+
+    function createFilterApplyHook(hideEmptyCols) {
+        var hook = document.createElement('button');
+        hook.type = 'button';
+        hook.id = 'kanban-filter-apply-hook';
+        hook.style.display = 'none';
+        hook.setAttribute('aria-hidden', 'true');
+        hook.setAttribute('tabindex', '-1');
+        hook.setAttribute('onclick', inlineStopPropagation() + applyAllFiltersBody(hideEmptyCols));
+        return hook;
+    }
+
     /** NetSuite M/D/YYYY → ISO YYYY-MM-DD for range comparisons. */
     function normalizeCloseDateToIso(dateStr) {
         if (!dateStr) return '';
@@ -96,25 +117,11 @@
             recountVisibleKpis();
     }
 
-    function setChipActiveState(c, activeFilter) {
-        var btns = c.querySelectorAll('.kanban-filter-chip');
-        for (var j = 0; j < btns.length; j++) {
-            var df = btns[j].getAttribute('data-filter');
-            var on = df === activeFilter;
-            btns[j].className = 'kanban-filter-chip' + (on ? ' active' : '');
-            btns[j].setAttribute('aria-pressed', on ? 'true' : 'false');
-        }
-    }
-
-    function clearDateRangeInputs() {
-        var ds = document.getElementById('kanban-date-start');
-        var de = document.getElementById('kanban-date-end');
-        if (ds) ds.value = '';
-        if (de) de.value = '';
-    }
-
     function makeDragStartOnclick() {
-        return "event.dataTransfer.setData('text/plain',this.getAttribute('data-opp-id')||'');" +
+        return "var e=typeof event!=='undefined'?event:null;" +
+            "if(e&&e.stopPropagation)e.stopPropagation();" +
+            "if(this.getAttribute('data-period-locked')==='1'){if(e&&e.preventDefault)e.preventDefault();return false;}" +
+            "if(e&&e.dataTransfer)e.dataTransfer.setData('text/plain',this.getAttribute('data-opp-id')||'');" +
             "this.classList.add('kanban-card-dragging');" +
             "this.setAttribute('data-drag-active','1');";
     }
@@ -125,17 +132,21 @@
     }
 
     function makeDragEndOnclick() {
-        return "this.classList.remove('kanban-card-dragging');" +
+        return "var e=typeof event!=='undefined'?event:null;if(e&&e.stopPropagation)e.stopPropagation();" +
+            "this.classList.remove('kanban-card-dragging');" +
             "var t=this;setTimeout(function(){t.removeAttribute('data-drag-active');},0);" +
             clearDropHovers();
     }
 
     function makeDragOverOnclick() {
-        return "event.preventDefault();this.classList.add('kanban-drop-hover');";
+        return "var e=typeof event!=='undefined'?event:null;" +
+            "if(e&&e.preventDefault)e.preventDefault();if(e&&e.stopPropagation)e.stopPropagation();" +
+            "this.classList.add('kanban-drop-hover');";
     }
 
     function makeDragLeaveOnclick() {
-        return "this.classList.remove('kanban-drop-hover');";
+        return "var e=typeof event!=='undefined'?event:null;if(e&&e.stopPropagation)e.stopPropagation();" +
+            "this.classList.remove('kanban-drop-hover');";
     }
 
     function recountVisibleColumnCounts() {
@@ -234,7 +245,9 @@
         var url = escapeJs(updateUrl);
         var allowed = escapeJs(allowedCsv);
         var label = escapeJs(statusLabel || '');
-        return "var e=event;var dropBody=this;e.preventDefault();e.stopPropagation();" +
+        return "var e=typeof event!=='undefined'?event:null;var dropBody=this;" +
+            "if(e&&e.preventDefault)e.preventDefault();if(e&&e.stopPropagation)e.stopPropagation();" +
+            "if(!e||!e.dataTransfer)return;" +
             clearDropHovers() +
             "var tid='" + tid + "';var url='" + url + "';var allowed='" + allowed + "';" +
             "if(!/^\\d+$/.test(tid))return;" +
@@ -242,29 +255,36 @@
             "var oid=e.dataTransfer.getData('text/plain');if(!/^\\d+$/.test(oid))return;" +
             "var c=document.getElementById('kanban-board-container');if(!c)return;" +
             "var card=null;var allCards=c.querySelectorAll('.kanban-card');for(var ci=0;ci<allCards.length;ci++){if(allCards[ci].getAttribute('data-opp-id')===oid){card=allCards[ci];break}}if(!card||card.getAttribute('data-saving')==='1')return;" +
+            "if(card.getAttribute('data-period-locked')==='1'){alert('This opportunity is in a closed accounting period and cannot be moved.');return;}" +
             "var srcBody=card.parentNode;if(!srcBody)return;" +
             "var srcCol=srcBody.parentNode;var fromStatus=srcCol?srcCol.getAttribute('data-status'):'';" +
             "if(fromStatus===tid)return;" +
-            "srcBody.removeChild(card);dropBody.appendChild(card);" +
-            "card.setAttribute('data-saving','1');card.style.pointerEvents='none';" +
+            "try{if(card.parentNode!==dropBody){dropBody.appendChild(card);}}catch(moveEx){}" +
             recountVisibleColumnCounts() +
+            "card.setAttribute('data-saving','1');card.style.pointerEvents='none';card.style.opacity='0.6';" +
+            "var closedRanges=[];try{var cr=c.getAttribute('data-closed-ranges')||'';" +
+            "if(cr)closedRanges=JSON.parse(decodeURIComponent(cr));}catch(closedEx){closedRanges=[];}" +
             "fetch(url,{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json'}," +
-            "body:JSON.stringify({opportunityId:oid,fromStatusId:fromStatus,entitystatus:tid})})" +
+            "body:JSON.stringify({opportunityId:oid,fromStatusId:fromStatus,entitystatus:tid,closedAccountingRanges:closedRanges})})" +
             ".then(function(r){return r.json()})" +
             ".then(function(d){" +
-            "card.removeAttribute('data-saving');card.style.pointerEvents='';" +
+            "card.removeAttribute('data-saving');card.style.pointerEvents='';card.style.opacity='';" +
             "if(d&&d.ok){" +
+            "try{if(card.parentNode!==dropBody){dropBody.appendChild(card);}}catch(moveEx2){}" +
             "var st='" + label + "';if(d.entitystatusText)st=d.entitystatusText;" +
             "var lt=st.toLowerCase();var tp='open';" +
             "if(lt.indexOf('closed won')>=0||lt.indexOf('closed - won')>=0)tp='won';" +
             "else if(lt.indexOf('closed lost')>=0||lt.indexOf('closed - lost')>=0)tp='lost';" +
             "card.setAttribute('data-status-type',tp);" +
+            recountVisibleColumnCounts() +
             recountVisibleKpis() +
-            "}else{srcBody.appendChild(card);dropBody.removeChild(card);alert('Save failed: '+(d&&d.error?d.error:'unknown'));" +
+            "}else{try{if(srcBody&&card.parentNode!==srcBody){srcBody.appendChild(card);}}catch(revertEx){}" +
             recountVisibleColumnCounts() +
-            "}}).catch(function(err){srcBody.appendChild(card);dropBody.removeChild(card);card.removeAttribute('data-saving');card.style.pointerEvents='';" +
+            "alert('Save failed: '+(d&&d.error?d.error:'unknown'));}" +
+            "}).catch(function(err){card.removeAttribute('data-saving');card.style.pointerEvents='';card.style.opacity='';" +
+            "try{if(srcBody&&card.parentNode!==srcBody){srcBody.appendChild(card);}}catch(revertEx2){}" +
+            recountVisibleColumnCounts() +
             "alert('Error: '+(err&&err.message?err.message:'network error'));" +
-            recountVisibleColumnCounts() +
             "});" +
             "";
     }
@@ -275,42 +295,436 @@
     // are lost. Only onclick attribute strings survive. This function generates
     // a self-contained onclick string that uses only built-in DOM APIs.
 
-    function makeFilterOnclick(filterValue, hideEmptyCols) {
-        return "var hideEmpty=" + (hideEmptyCols ? 'true' : 'false') + ";var f='" + filterValue + "';" +
-            "var c=document.getElementById('kanban-board-container');" +
-            "var ds=document.getElementById('kanban-date-start');var de=document.getElementById('kanban-date-end');" +
-            "if(ds)ds.value='';if(de)de.value='';" +
+    function formatIsoForBadge(iso) {
+        if (!iso || iso.length < 10) return '';
+        var parts = iso.split('-');
+        if (parts.length !== 3) return iso;
+        return parts[1] + '/' + parts[2] + '/' + parts[0];
+    }
+
+    function scrollActivePeriodListIntoViewBody() {
+        return "var modeEl=document.getElementById('kanban-filter-mode');var mv=modeEl?modeEl.value:'acct';" +
+            "if(mv==='range')return;" +
+            "var listId=mv==='quarter'?'kanban-filter-quarter-list':'kanban-filter-acct-list';" +
+            "var list=document.getElementById(listId);if(!list)return;" +
+            "var cb=list.querySelector('.kanban-period-cb:checked');" +
+            "if(!cb||!cb.parentElement)return;" +
+            "try{cb.parentElement.scrollIntoView({block:'nearest'});}catch(scEx){" +
+            "var row=cb.parentElement;list.scrollTop=Math.max(0,row.offsetTop-list.offsetTop);}";
+    }
+
+    function applyDefaultRangeDatesBody(forceAssign) {
+        var startIso = escapeJs(data.defaultRangeStartIso || '');
+        var endIso = escapeJs(data.defaultRangeEndIso || '');
+        if (!startIso || !endIso) return '';
+        if (forceAssign) {
+            return "var rs=document.getElementById('kanban-date-start');var re=document.getElementById('kanban-date-end');" +
+                "if(rs)rs.value='" + startIso + "';if(re)re.value='" + endIso + "';";
+        }
+        return "var rs=document.getElementById('kanban-date-start');var re=document.getElementById('kanban-date-end');" +
+            "if(rs&&!rs.value)rs.value='" + startIso + "';" +
+            "if(re&&!re.value)re.value='" + endIso + "';";
+    }
+
+    function makeSyncFilterModeUiBody() {
+        return "var modeEl=document.getElementById('kanban-filter-mode');var mv=modeEl?modeEl.value:'acct';" +
+            "var acctList=document.getElementById('kanban-filter-acct-list');" +
+            "var qtrList=document.getElementById('kanban-filter-quarter-list');" +
+            "var rangeList=document.getElementById('kanban-filter-range-list');" +
+            "if(acctList)acctList.style.display=mv==='acct'?'block':'none';" +
+            "if(qtrList)qtrList.style.display=mv==='quarter'?'block':'none';" +
+            "if(rangeList)rangeList.style.display=mv==='range'?'flex':'none';" +
+            "var ba=document.getElementById('kanban-filter-mode-acct');" +
+            "var bq=document.getElementById('kanban-filter-mode-quarter');" +
+            "var br=document.getElementById('kanban-filter-mode-range');" +
+            "if(ba)ba.className='kanban-filter-mode-btn'+(mv==='acct'?' active':'');" +
+            "if(bq)bq.className='kanban-filter-mode-btn'+(mv==='quarter'?' active':'');" +
+            "if(br)br.className='kanban-filter-mode-btn'+(mv==='range'?' active':'');" +
+            scrollActivePeriodListIntoViewBody();
+    }
+
+    function ensureDefaultPeriodsCheckedBody() {
+        return "var root=document.getElementById('kanban-board-container');" +
+            "var defAcct=root?root.getAttribute('data-default-acct-periods')||'':'';" +
+            "var defQ=root?root.getAttribute('data-default-quarter-periods')||'':'';" +
+            "var modeEl=document.getElementById('kanban-filter-mode');var mv=modeEl?modeEl.value:'acct';" +
+            "if(mv!=='range'){" +
+            "var grp=mv==='quarter'?'quarter':'acct';" +
+            "var defs=(mv==='quarter'?defQ:defAcct).split(',');" +
+            "var cbs=document.querySelectorAll('.kanban-period-cb[data-period-group=\"'+grp+'\"]');" +
+            "var any=false;for(var di=0;di<cbs.length;di++){if(cbs[di].checked){any=true;break;}}" +
+            "if(!any){for(var dj=0;dj<cbs.length;dj++){" +
+            "var pid=cbs[dj].getAttribute('data-period-id')||'';" +
+            "for(var dk=0;dk<defs.length;dk++){if(defs[dk]&&defs[dk]===pid){cbs[dj].checked=true;break;}}}}}";
+    }
+
+    function ensureDefaultPeriodsChecked() {
+        var root = document.getElementById('kanban-board-container');
+        var defAcct = root ? (root.getAttribute('data-default-acct-periods') || '') : '';
+        var defQ = root ? (root.getAttribute('data-default-quarter-periods') || '') : '';
+        var modeEl = document.getElementById('kanban-filter-mode');
+        var mv = modeEl ? modeEl.value : 'acct';
+        if (mv === 'range') return;
+        var group = mv === 'quarter' ? 'quarter' : 'acct';
+        var defs = (mv === 'quarter' ? defQ : defAcct).split(',').filter(Boolean);
+        var checkboxes = document.querySelectorAll('.kanban-period-cb[data-period-group="' + group + '"]');
+        var anyChecked = false;
+        for (var i = 0; i < checkboxes.length; i++) {
+            if (checkboxes[i].checked) {
+                anyChecked = true;
+                break;
+            }
+        }
+        if (anyChecked) return;
+        for (var j = 0; j < checkboxes.length; j++) {
+            var periodId = checkboxes[j].getAttribute('data-period-id') || '';
+            for (var k = 0; k < defs.length; k++) {
+                if (defs[k] === periodId) {
+                    checkboxes[j].checked = true;
+                    break;
+                }
+            }
+        }
+    }
+
+    function updateFilterChipLabelBody() {
+        return "var trig=document.getElementById('kanban-filter-trigger');if(!trig)return;" +
+            "var wrap=trig.parentElement;var lbl=document.getElementById('kanban-filter-chip-label');" +
+            "var val=document.getElementById('kanban-filter-chip-value');var sep=document.getElementById('kanban-filter-chip-sep');" +
+            "var clr=document.getElementById('kanban-filter-chip-clear');" +
+            "var modeEl=document.getElementById('kanban-filter-mode');var mv=modeEl?modeEl.value:'acct';" +
+            "var active=false;var showClear=false;var label='Accounting';var value='Select period';" +
+            "function fmtIso(iso){if(!iso||iso.length<10)return '';var p=iso.split('-');return p[1]+'/'+p[2]+'/'+p[0];}" +
+            "if(mv==='range'){label='Close date';" +
+            "var rs=document.getElementById('kanban-date-start');var re=document.getElementById('kanban-date-end');" +
+            "var rsv=rs?rs.value:'';var rev=re?re.value:'';" +
+            "if(rsv&&rev){value=fmtIso(rsv)+' \\u2013 '+fmtIso(rev);active=true;showClear=true;}else{value='Select range';}" +
+            "}else{label=mv==='quarter'?'Quarter':'Accounting';" +
+            "var sel=document.querySelectorAll('.kanban-period-cb[data-period-group='+mv+']:checked');" +
+            "if(sel.length===1){var row=sel[0].parentElement;value=row?row.textContent.replace(/^\\s+/,'').trim():'Selected';active=true;showClear=true;}" +
+            "else if(sel.length>1){value=String(sel.length);active=true;showClear=true;}}" +
+            "if(lbl)lbl.textContent=label;if(val)val.textContent=value;" +
+            "trig.className='kanban-filter-chip'+(active?' active':'');" +
+            "if(sep)sep.style.display='';if(clr)clr.style.display=showClear?'':'none';" +
+            "if(wrap&&(' '+wrap.className+' ').indexOf(' kanban-filter-chip-wrap ')>=0){" +
+            "wrap.className='kanban-filter-chip-wrap'+(active?' active':'')+(showClear?' has-clear':'');}";
+    }
+
+    function applyAllFiltersBody(hideEmptyCols) {
+        return ensureDefaultPeriodsCheckedBody() +
+            "var c=document.getElementById('kanban-board-container');if(!c)return;" +
             "var cards=c.querySelectorAll('.kanban-card');" +
+            "var ranges=[];var useRange=false;var badRange=false;var rs='';var re='';" +
+            "var searchEl=document.getElementById('kanban-search');" +
+            "var q=searchEl?(searchEl.value||'').trim().toLowerCase():'';" +
+            "var modeEl=document.getElementById('kanban-filter-mode');var mv=modeEl?modeEl.value:'acct';" +
+            "if(mv==='range'){" +
+            "var startEl=document.getElementById('kanban-date-start');var endEl=document.getElementById('kanban-date-end');" +
+            "rs=startEl?startEl.value:'';re=endEl?endEl.value:'';useRange=!!(rs&&re);badRange=useRange&&rs>re;" +
+            "}else{" +
+            "var cbs=document.querySelectorAll('.kanban-period-cb[data-period-group=\"'+mv+'\"]');" +
+            "for(var ci=0;ci<cbs.length;ci++){if(cbs[ci].checked){" +
+            "var s=cbs[ci].getAttribute('data-start');var pe=cbs[ci].getAttribute('data-end');" +
+            "if(s&&pe)ranges.push({s:s,e:pe});}}}" +
             "for(var i=0;i<cards.length;i++){" +
-            "cards[i].style.display=(cards[i].getAttribute('data-cg').indexOf(f)>=0)?'':'none'}" +
-            "var btns=c.querySelectorAll('.kanban-filter-chip');" +
-            "for(var j=0;j<btns.length;j++){" +
-            "var df=btns[j].getAttribute('data-filter');var on=df===f;" +
-            "btns[j].className='kanban-filter-chip'+(on?' active':'');" +
-            "btns[j].setAttribute('aria-pressed',on?'true':'false');}" +
+            "var d=cards[i].getAttribute('data-close-date')||'';" +
+            "var show=false;" +
+            "if(mv==='range'){" +
+            "if(!useRange||badRange){show=true;}" +
+            "else{show=!!(d&&rs<=d&&d<=re);}" +
+            "}else{" +
+            "if(!ranges.length){show=true;}" +
+            "else{for(var ri=0;ri<ranges.length;ri++){if(d&&ranges[ri].s<=d&&d<=ranges[ri].e){show=true;break;}}}" +
+            "}" +
+            "if(show&&q){var st=cards[i].getAttribute('data-search-text')||'';if(st.indexOf(q)<0)show=false;}" +
+            "cards[i].style.display=show?'':'none';}" +
+            updateFilterChipLabelBody() +
             filterColumnKpiTail(hideEmptyCols);
     }
 
-    function makeRangeApplyOnclick(hideEmptyCols) {
-        return "var c=document.getElementById('kanban-board-container');" +
-            "var startEl=document.getElementById('kanban-date-start');" +
-            "var endEl=document.getElementById('kanban-date-end');" +
-            "if(!startEl||!endEl)return;" +
-            "var start=startEl.value;var end=endEl.value;" +
-            "if(!start||!end)return;" +
-            "var hideEmpty=" + (hideEmptyCols ? 'true' : 'false') + ";" +
-            "var cards=c.querySelectorAll('.kanban-card');" +
-            "for(var i=0;i<cards.length;i++){" +
-            "var d=cards[i].getAttribute('data-close-date')||'';" +
-            "var show=!!(d&&start<=d&&d<=end);" +
-            "if(start>end)show=false;" +
-            "cards[i].style.display=show?'':'none';}" +
-            "var btns=c.querySelectorAll('.kanban-filter-chip');" +
-            "for(var j=0;j<btns.length;j++){" +
-            "var df=btns[j].getAttribute('data-filter');var on=df==='CUSTOM_RANGE';" +
-            "btns[j].className='kanban-filter-chip'+(on?' active':'');" +
-            "btns[j].setAttribute('aria-pressed',on?'true':'false');}" +
-            filterColumnKpiTail(hideEmptyCols);
+    function makeApplyFiltersTriggerOnclick() {
+        return inlineStopPropagation() + inlineClickApplyHook();
+    }
+
+    function makeFilterApplyOninput() {
+        return inlineClickApplyHook();
+    }
+
+    function makeFilterClearOnclick(hideEmptyCols, defaultAcctCsv, defaultQuarterCsv, defaultRangeStart, defaultRangeEnd) {
+        var acctCsv = escapeJs(defaultAcctCsv);
+        var quarterCsv = escapeJs(defaultQuarterCsv);
+        var rangeStart = escapeJs(defaultRangeStart || '');
+        var rangeEnd = escapeJs(defaultRangeEnd || '');
+        return inlineStopPropagation() +
+            "var modeEl=document.getElementById('kanban-filter-mode');var mv=modeEl?modeEl.value:'acct';" +
+            "if(mv==='range'){" +
+            (rangeStart && rangeEnd
+                ? "var rs=document.getElementById('kanban-date-start');var re=document.getElementById('kanban-date-end');" +
+                    "if(rs)rs.value='" + rangeStart + "';if(re)re.value='" + rangeEnd + "';"
+                : "var rs=document.getElementById('kanban-date-start');var re=document.getElementById('kanban-date-end');" +
+                    "if(rs)rs.value='';if(re)re.value='';") +
+            "}else{" +
+            "var grp=mv==='quarter'?'quarter':'acct';" +
+            "var defCsv=mv==='quarter'?'" + quarterCsv + "':'" + acctCsv + "';" +
+            "var defs=defCsv?defCsv.split(','):[];" +
+            "var cbs=document.querySelectorAll('.kanban-period-cb[data-period-group='+grp+']');" +
+            "for(var xi=0;xi<cbs.length;xi++){cbs[xi].checked=false;}" +
+            "for(var xj=0;xj<cbs.length;xj++){" +
+            "var pid=cbs[xj].getAttribute('data-period-id')||'';" +
+            "for(var xk=0;xk<defs.length;xk++){if(defs[xk]&&defs[xk]===pid){cbs[xj].checked=true;break;}}}" +
+            "}" +
+            inlineClickApplyHook();
+    }
+
+    function makeFilterModeOnclick(mode, hideEmptyCols) {
+        var rangeDefault = mode === 'range' ? applyDefaultRangeDatesBody(false) : '';
+        return inlineStopPropagation() +
+            "var m=document.getElementById('kanban-filter-mode');if(m)m.value='" + escapeJs(mode) + "';" +
+            rangeDefault +
+            makeSyncFilterModeUiBody() +
+            inlineClickApplyHook();
+    }
+
+    function makePeriodPanelToggleOnclick(panelId) {
+        var pid = escapeJs(panelId);
+        return inlineStopPropagation() +
+            "var p=document.getElementById('" + pid + "');if(!p)return;" +
+            "var open=p.style.display!=='none';" +
+            closeAllPeriodPanelsBody() +
+            "if(!open){p.style.display='block';" + scrollActivePeriodListIntoViewBody() + "}";
+    }
+
+    function makeClosePeriodPanelsOnclick() {
+        return "if(document.querySelector('.kanban-card-dragging,[data-drag-active]'))return;" +
+            "var e=typeof event!=='undefined'?event:null;var t=e&&e.target;if(!t)return;" +
+            "var el=t;var inside=false;" +
+            "while(el){var cn=el.className;if(cn&&(' '+cn+' ').indexOf(' kanban-period-dropdown ')>=0){inside=true;break;}el=el.parentElement;}" +
+            "if(inside)return;" +
+            closeAllPeriodPanelsBody() +
+            inlineClickApplyHook();
+    }
+
+    function clearActiveFilter(hideEmptyCols, defaultAcctIds, defaultQuarterIds) {
+        var modeEl = document.getElementById('kanban-filter-mode');
+        var mv = modeEl ? modeEl.value : 'acct';
+        if (mv === 'range') {
+            applyDefaultRangeDates(true);
+        } else {
+            var group = mv === 'quarter' ? 'quarter' : 'acct';
+            var defs = mv === 'quarter' ? defaultQuarterIds : defaultAcctIds;
+            var checkboxes = document.querySelectorAll('.kanban-period-cb[data-period-group="' + group + '"]');
+            for (var i = 0; i < checkboxes.length; i++) {
+                checkboxes[i].checked = false;
+            }
+            for (var j = 0; j < checkboxes.length; j++) {
+                var periodId = checkboxes[j].getAttribute('data-period-id') || '';
+                for (var k = 0; k < defs.length; k++) {
+                    if (defs[k] && defs[k] === periodId) {
+                        checkboxes[j].checked = true;
+                        break;
+                    }
+                }
+            }
+        }
+        applyAllFilters();
+    }
+
+    function scrollActivePeriodListIntoView() {
+        var modeEl = document.getElementById('kanban-filter-mode');
+        var mv = modeEl ? modeEl.value : 'acct';
+        if (mv === 'range') return;
+        var listId = mv === 'quarter' ? 'kanban-filter-quarter-list' : 'kanban-filter-acct-list';
+        var list = document.getElementById(listId);
+        if (!list) return;
+        var cb = list.querySelector('.kanban-period-cb:checked');
+        if (!cb || !cb.parentElement) return;
+        try {
+            cb.parentElement.scrollIntoView({ block: 'nearest' });
+        } catch (scEx) {
+            var row = cb.parentElement;
+            list.scrollTop = Math.max(0, row.offsetTop - list.offsetTop);
+        }
+    }
+
+    function applyDefaultRangeDates(forceAssign) {
+        var startIso = data.defaultRangeStartIso || '';
+        var endIso = data.defaultRangeEndIso || '';
+        if (!startIso || !endIso) return;
+        var startEl = document.getElementById('kanban-date-start');
+        var endEl = document.getElementById('kanban-date-end');
+        if (startEl && (forceAssign || !startEl.value)) startEl.value = startIso;
+        if (endEl && (forceAssign || !endEl.value)) endEl.value = endIso;
+    }
+
+    function syncFilterModeUi() {
+        var modeEl = document.getElementById('kanban-filter-mode');
+        var mv = modeEl ? modeEl.value : 'acct';
+        var acctList = document.getElementById('kanban-filter-acct-list');
+        var qtrList = document.getElementById('kanban-filter-quarter-list');
+        var rangeList = document.getElementById('kanban-filter-range-list');
+        if (acctList) acctList.style.display = mv === 'acct' ? 'block' : 'none';
+        if (qtrList) qtrList.style.display = mv === 'quarter' ? 'block' : 'none';
+        if (rangeList) rangeList.style.display = mv === 'range' ? 'flex' : 'none';
+        var ba = document.getElementById('kanban-filter-mode-acct');
+        var bq = document.getElementById('kanban-filter-mode-quarter');
+        var br = document.getElementById('kanban-filter-mode-range');
+        if (ba) ba.className = 'kanban-filter-mode-btn' + (mv === 'acct' ? ' active' : '');
+        if (bq) bq.className = 'kanban-filter-mode-btn' + (mv === 'quarter' ? ' active' : '');
+        if (br) br.className = 'kanban-filter-mode-btn' + (mv === 'range' ? ' active' : '');
+        scrollActivePeriodListIntoView();
+    }
+
+    function setFilterMode(mode, hideEmptyCols) {
+        var modeEl = document.getElementById('kanban-filter-mode');
+        if (modeEl) modeEl.value = mode;
+        if (mode === 'range') applyDefaultRangeDates(false);
+        syncFilterModeUi();
+        applyAllFilters();
+    }
+
+    function updateFilterChipLabel() {
+        var trig = document.getElementById('kanban-filter-trigger');
+        if (!trig) return;
+
+        var wrap = trig.parentElement;
+        var labelEl = document.getElementById('kanban-filter-chip-label');
+        var valueEl = document.getElementById('kanban-filter-chip-value');
+        var sepEl = document.getElementById('kanban-filter-chip-sep');
+        var clearEl = document.getElementById('kanban-filter-chip-clear');
+        var modeEl = document.getElementById('kanban-filter-mode');
+        var mv = modeEl ? modeEl.value : 'acct';
+        var active = false;
+        var showClear = false;
+
+        if (mv === 'range') {
+            if (labelEl) labelEl.textContent = 'Close date';
+            var startEl = document.getElementById('kanban-date-start');
+            var endEl = document.getElementById('kanban-date-end');
+            var rangeStart = startEl ? startEl.value : '';
+            var rangeEnd = endEl ? endEl.value : '';
+            if (rangeStart && rangeEnd) {
+                if (valueEl) {
+                    valueEl.textContent = formatIsoForBadge(rangeStart) + ' \u2013 ' + formatIsoForBadge(rangeEnd);
+                }
+                active = true;
+                showClear = true;
+            } else if (valueEl) {
+                valueEl.textContent = 'Select range';
+            }
+        } else {
+            if (labelEl) labelEl.textContent = mv === 'quarter' ? 'Quarter' : 'Accounting';
+            var selected = document.querySelectorAll('.kanban-period-cb[data-period-group="' + mv + '"]:checked');
+            if (selected.length === 0) {
+                if (valueEl) valueEl.textContent = 'Select period';
+            } else if (selected.length === 1) {
+                var row = selected[0].parentElement;
+                var text = row ? row.textContent.replace(/^\s+/, '').trim() : '';
+                if (valueEl) valueEl.textContent = text || 'Selected';
+                active = true;
+                showClear = true;
+            } else {
+                if (valueEl) valueEl.textContent = String(selected.length);
+                active = true;
+                showClear = true;
+            }
+        }
+
+        trig.className = 'kanban-filter-chip' + (active ? ' active' : '');
+        if (sepEl) sepEl.style.display = '';
+        if (clearEl) clearEl.style.display = showClear ? '' : 'none';
+        if (wrap && (' ' + wrap.className + ' ').indexOf(' kanban-filter-chip-wrap ') >= 0) {
+            wrap.className = 'kanban-filter-chip-wrap' + (active ? ' active' : '') + (showClear ? ' has-clear' : '');
+        }
+    }
+
+    function closeAllPeriodPanelsBody() {
+        return "var panels=document.querySelectorAll('.kanban-period-panel');" +
+            "for(var pi=0;pi<panels.length;pi++){panels[pi].style.display='none';}";
+    }
+
+    function closeAllPeriodPanels() {
+        var panels = document.querySelectorAll('.kanban-period-panel');
+        for (var pi = 0; pi < panels.length; pi++) {
+            panels[pi].style.display = 'none';
+        }
+    }
+
+    function togglePeriodPanel(panelId) {
+        var panel = document.getElementById(panelId);
+        if (!panel) return;
+        var open = panel.style.display !== 'none';
+        closeAllPeriodPanels();
+        if (!open) {
+            panel.style.display = 'block';
+            scrollActivePeriodListIntoView();
+        }
+    }
+
+    function applyAllFilters() {
+        var hideEmptyCols = !isParamDriven();
+        var c = document.getElementById('kanban-board-container');
+        if (!c) return;
+
+        ensureDefaultPeriodsChecked();
+
+        var modeEl = document.getElementById('kanban-filter-mode');
+        var mode = modeEl ? modeEl.value : 'acct';
+
+        var cards = c.querySelectorAll('.kanban-card');
+        var ranges = [];
+        var rangeStart = '';
+        var rangeEnd = '';
+        var useRange = false;
+        var badRange = false;
+        var searchEl = document.getElementById('kanban-search');
+        var searchQ = searchEl ? (searchEl.value || '').trim().toLowerCase() : '';
+
+        if (mode === 'range') {
+            var startEl = document.getElementById('kanban-date-start');
+            var endEl = document.getElementById('kanban-date-end');
+            rangeStart = startEl ? startEl.value : '';
+            rangeEnd = endEl ? endEl.value : '';
+            useRange = !!(rangeStart && rangeEnd);
+            badRange = useRange && rangeStart > rangeEnd;
+        } else {
+            var checkboxes = c.querySelectorAll('.kanban-period-cb[data-period-group="' + mode + '"]');
+            for (var ci = 0; ci < checkboxes.length; ci++) {
+                if (!checkboxes[ci].checked) continue;
+                var start = checkboxes[ci].getAttribute('data-start');
+                var end = checkboxes[ci].getAttribute('data-end');
+                if (start && end) ranges.push({ s: start, e: end });
+            }
+        }
+
+        for (var i = 0; i < cards.length; i++) {
+            var closeDate = cards[i].getAttribute('data-close-date') || '';
+            var show = false;
+            if (mode === 'range') {
+                if (!useRange || badRange) {
+                    show = true;
+                } else {
+                    show = !!(closeDate && rangeStart <= closeDate && closeDate <= rangeEnd);
+                }
+            } else if (ranges.length === 0) {
+                show = true;
+            } else {
+                for (var ri = 0; ri < ranges.length; ri++) {
+                    if (closeDate && ranges[ri].s <= closeDate && closeDate <= ranges[ri].e) {
+                        show = true;
+                        break;
+                    }
+                }
+            }
+            if (show && searchQ) {
+                var searchText = cards[i].getAttribute('data-search-text') || '';
+                if (searchText.indexOf(searchQ) < 0) show = false;
+            }
+            cards[i].style.display = show ? '' : 'none';
+        }
+
+        updateFilterChipLabel();
+        applyColumnVisibility(hideEmptyCols);
+        updateKpis();
     }
 
     function applyColumnVisibility(hideEmptyCols) {
@@ -329,43 +743,202 @@
         }
     }
 
-    // Equivalent JS function for jsdom test compatibility
-    // (jsdom doesn't evaluate onclick attribute strings on .click())
-    function applyFilter(filterValue) {
-        var hideEmptyCols = !isParamDriven();
-        var c = document.getElementById('kanban-board-container');
-        if (!c) return;
-        clearDateRangeInputs();
-        var cards = c.querySelectorAll('.kanban-card');
-        for (var i = 0; i < cards.length; i++) {
-            cards[i].style.display = (cards[i].getAttribute('data-cg').indexOf(filterValue) >= 0) ? '' : 'none';
-        }
-        setChipActiveState(c, filterValue);
-        applyColumnVisibility(hideEmptyCols);
-        updateKpis();
+    function appendPeriodCheckboxes(listEl, group, periods, defaultIds, hideEmptyCols) {
+        (periods || []).forEach(function (period) {
+            var row = document.createElement('label');
+            row.className = 'kanban-period-option';
+
+            var checkbox = document.createElement('input');
+            checkbox.type = 'checkbox';
+            checkbox.className = 'kanban-period-cb';
+            checkbox.setAttribute('data-period-group', group);
+            checkbox.setAttribute('data-period-id', period.id);
+            checkbox.setAttribute('data-start', period.startIso);
+            checkbox.setAttribute('data-end', period.endIso);
+            checkbox.checked = defaultIds.indexOf(period.id) >= 0;
+            checkbox.setAttribute('onclick', makeApplyFiltersTriggerOnclick());
+
+            row.appendChild(checkbox);
+            row.appendChild(document.createTextNode(' ' + period.name));
+            listEl.appendChild(row);
+        });
     }
 
-    function applyRangeFilter(start, end) {
-        var hideEmptyCols = !isParamDriven();
-        var c = document.getElementById('kanban-board-container');
-        if (!c) return;
-        var startEl = document.getElementById('kanban-date-start');
-        var endEl = document.getElementById('kanban-date-end');
-        if (startEl && start) startEl.value = start;
-        if (endEl && end) endEl.value = end;
-        var startVal = startEl ? startEl.value : '';
-        var endVal = endEl ? endEl.value : '';
-        if (!startVal || !endVal) return;
-        var cards = c.querySelectorAll('.kanban-card');
-        var invalidRange = startVal > endVal;
-        for (var i = 0; i < cards.length; i++) {
-            var d = cards[i].getAttribute('data-close-date') || '';
-            var show = !invalidRange && d && startVal <= d && d <= endVal;
-            cards[i].style.display = show ? '' : 'none';
-        }
-        setChipActiveState(c, 'CUSTOM_RANGE');
-        applyColumnVisibility(hideEmptyCols);
-        updateKpis();
+    function createSearchInput(hideEmptyCols) {
+        var search = document.createElement('input');
+        search.type = 'search';
+        search.id = 'kanban-search';
+        search.className = 'kanban-search-input';
+        search.setAttribute('placeholder', 'Search opportunities');
+        search.setAttribute('aria-label', 'Search opportunities');
+        search.setAttribute('oninput', makeFilterApplyOninput());
+        return search;
+    }
+
+    function createUnifiedFilterChip(hideEmptyCols) {
+        var defaultAcctIds = data.defaultAccountingPeriodIds || [];
+        var defaultQuarterIds = data.defaultQuarterPeriodIds || [];
+        var defaultAcctCsv = defaultAcctIds.join(',');
+        var defaultQuarterCsv = defaultQuarterIds.join(',');
+        var defaultRangeStart = data.defaultRangeStartIso || '';
+        var defaultRangeEnd = data.defaultRangeEndIso || '';
+
+        var wrap = document.createElement('div');
+        wrap.className = 'kanban-period-dropdown';
+
+        var chipWrap = document.createElement('div');
+        chipWrap.className = 'kanban-filter-chip-wrap has-clear active';
+
+        var trigger = document.createElement('div');
+        trigger.className = 'kanban-filter-chip active';
+        trigger.id = 'kanban-filter-trigger';
+        trigger.setAttribute('role', 'button');
+        trigger.setAttribute('tabindex', '0');
+        trigger.setAttribute('aria-haspopup', 'dialog');
+        trigger.setAttribute('onclick', makePeriodPanelToggleOnclick('kanban-filter-panel'));
+
+        var chipLabel = document.createElement('span');
+        chipLabel.className = 'kanban-filter-chip-label';
+        chipLabel.id = 'kanban-filter-chip-label';
+        chipLabel.textContent = 'Accounting';
+
+        var chipSep = document.createElement('span');
+        chipSep.className = 'kanban-filter-chip-sep';
+        chipSep.id = 'kanban-filter-chip-sep';
+        chipSep.textContent = '';
+
+        var chipValue = document.createElement('span');
+        chipValue.className = 'kanban-filter-chip-value';
+        chipValue.id = 'kanban-filter-chip-value';
+        chipValue.textContent = 'Select period';
+
+        trigger.appendChild(chipLabel);
+        trigger.appendChild(chipSep);
+        trigger.appendChild(chipValue);
+
+        var chipClear = document.createElement('div');
+        chipClear.className = 'kanban-filter-chip-clear';
+        chipClear.id = 'kanban-filter-chip-clear';
+        chipClear.setAttribute('role', 'button');
+        chipClear.setAttribute('tabindex', '0');
+        chipClear.setAttribute('aria-label', 'Clear filter');
+        chipClear.textContent = '\u00d7';
+        chipClear.setAttribute('onclick', makeFilterClearOnclick(
+            hideEmptyCols,
+            defaultAcctCsv,
+            defaultQuarterCsv,
+            defaultRangeStart,
+            defaultRangeEnd
+        ));
+
+        chipWrap.appendChild(trigger);
+        chipWrap.appendChild(chipClear);
+
+        var panel = document.createElement('div');
+        panel.className = 'kanban-period-panel kanban-filter-panel';
+        panel.id = 'kanban-filter-panel';
+        panel.style.display = 'none';
+        panel.setAttribute('onclick', inlineStopPropagation());
+
+        var modeInput = document.createElement('input');
+        modeInput.type = 'hidden';
+        modeInput.id = 'kanban-filter-mode';
+        modeInput.value = 'acct';
+        panel.appendChild(modeInput);
+
+        var modeBar = document.createElement('div');
+        modeBar.className = 'kanban-filter-mode-bar';
+
+        var acctModeBtn = document.createElement('div');
+        acctModeBtn.id = 'kanban-filter-mode-acct';
+        acctModeBtn.className = 'kanban-filter-mode-btn active';
+        acctModeBtn.setAttribute('role', 'button');
+        acctModeBtn.setAttribute('tabindex', '0');
+        acctModeBtn.textContent = 'Accounting';
+        acctModeBtn.setAttribute('onclick', makeFilterModeOnclick('acct', hideEmptyCols));
+
+        var quarterModeBtn = document.createElement('div');
+        quarterModeBtn.id = 'kanban-filter-mode-quarter';
+        quarterModeBtn.className = 'kanban-filter-mode-btn';
+        quarterModeBtn.setAttribute('role', 'button');
+        quarterModeBtn.setAttribute('tabindex', '0');
+        quarterModeBtn.textContent = 'Quarter';
+        quarterModeBtn.setAttribute('onclick', makeFilterModeOnclick('quarter', hideEmptyCols));
+
+        var rangeModeBtn = document.createElement('div');
+        rangeModeBtn.id = 'kanban-filter-mode-range';
+        rangeModeBtn.className = 'kanban-filter-mode-btn';
+        rangeModeBtn.setAttribute('role', 'button');
+        rangeModeBtn.setAttribute('tabindex', '0');
+        rangeModeBtn.textContent = 'Close date';
+        rangeModeBtn.setAttribute('onclick', makeFilterModeOnclick('range', hideEmptyCols));
+
+        modeBar.appendChild(acctModeBtn);
+        modeBar.appendChild(quarterModeBtn);
+        modeBar.appendChild(rangeModeBtn);
+        panel.appendChild(modeBar);
+
+        var acctList = document.createElement('div');
+        acctList.id = 'kanban-filter-acct-list';
+        acctList.className = 'kanban-filter-period-list';
+        appendPeriodCheckboxes(
+            acctList,
+            'acct',
+            data.accountingPeriods || [],
+            data.defaultAccountingPeriodIds || [],
+            hideEmptyCols
+        );
+        panel.appendChild(acctList);
+
+        var quarterList = document.createElement('div');
+        quarterList.id = 'kanban-filter-quarter-list';
+        quarterList.className = 'kanban-filter-period-list';
+        quarterList.style.display = 'none';
+        appendPeriodCheckboxes(
+            quarterList,
+            'quarter',
+            data.quarterPeriods || [],
+            data.defaultQuarterPeriodIds || [],
+            hideEmptyCols
+        );
+        panel.appendChild(quarterList);
+
+        var rangeList = document.createElement('div');
+        rangeList.id = 'kanban-filter-range-list';
+        rangeList.className = 'kanban-filter-range-list';
+        rangeList.style.display = 'none';
+
+        var dateRangeLabel = document.createElement('span');
+        dateRangeLabel.className = 'kanban-date-range-label';
+        dateRangeLabel.textContent = 'From';
+
+        var dateStart = document.createElement('input');
+        dateStart.type = 'date';
+        dateStart.id = 'kanban-date-start';
+        dateStart.className = 'kanban-date-input';
+        dateStart.setAttribute('aria-label', 'Close date from');
+        dateStart.setAttribute('onchange', makeApplyFiltersTriggerOnclick());
+
+        var dateToLabel = document.createElement('span');
+        dateToLabel.className = 'kanban-date-range-label';
+        dateToLabel.textContent = 'To';
+
+        var dateEnd = document.createElement('input');
+        dateEnd.type = 'date';
+        dateEnd.id = 'kanban-date-end';
+        dateEnd.className = 'kanban-date-input';
+        dateEnd.setAttribute('aria-label', 'Close date to');
+        dateEnd.setAttribute('onchange', makeApplyFiltersTriggerOnclick());
+
+        rangeList.appendChild(dateRangeLabel);
+        rangeList.appendChild(dateStart);
+        rangeList.appendChild(dateToLabel);
+        rangeList.appendChild(dateEnd);
+        panel.appendChild(rangeList);
+
+        wrap.appendChild(chipWrap);
+        wrap.appendChild(panel);
+        return wrap;
     }
 
     // ---- DOM Construction ----
@@ -381,6 +954,15 @@
         card.setAttribute('data-close-date', normalizeCloseDateToIso(opp.expectedclosedate));
         card.setAttribute('data-amount', opp.projectedtotal || '0');
         card.setAttribute('data-status-type', classifyStatus(opp.entitystatusText));
+        card.setAttribute(
+            'data-search-text',
+            ((opp.tranid || '') + ' ' + (opp.companyname || '')).toLowerCase()
+        );
+        if (opp.isInClosedPeriod) {
+            card.setAttribute('data-period-locked', '1');
+            card.className = 'kanban-card kanban-card-period-locked';
+            card.setAttribute('title', 'Closed accounting period — cannot move on board');
+        }
 
         var header = document.createElement('div');
         header.className = 'kanban-card-header';
@@ -446,7 +1028,7 @@
             };
         }
 
-        if (data.updateUrl && opp.id) {
+        if (data.updateUrl && opp.id && !opp.isInClosedPeriod) {
             card.setAttribute('draggable', 'true');
             card.setAttribute('ondragstart', makeDragStartOnclick());
             card.setAttribute('ondragend', makeDragEndOnclick());
@@ -552,70 +1134,17 @@
         var filtersWrap = document.createElement('div');
         filtersWrap.className = 'kanban-toolbar-filters';
 
-        var filterButtons = [
-            { value: 'THIS_MONTH', text: 'This Month' },
-            { value: 'THIS_QUARTER', text: 'This Quarter' },
-            { value: 'NEXT_QUARTER', text: 'Next Quarter' },
-            { value: 'LAST_QUARTER', text: 'Last Quarter' }
-        ];
-        filterButtons.forEach(function (opt) {
-            var btn = document.createElement('div');
-            btn.className = 'kanban-filter-chip' + (opt.value === 'THIS_MONTH' ? ' active' : '');
-            btn.setAttribute('role', 'button');
-            btn.setAttribute('tabindex', '0');
-            btn.setAttribute('aria-pressed', opt.value === 'THIS_MONTH' ? 'true' : 'false');
-            btn.setAttribute('data-filter', opt.value);
-            btn.textContent = opt.text;
-            btn.setAttribute('onclick', makeFilterOnclick(opt.value, hideEmptyCols));
-            btn.onclick = function () { applyFilter(opt.value); };
-            filtersWrap.appendChild(btn);
-        });
-
-        var rangeChip = document.createElement('div');
-        rangeChip.className = 'kanban-filter-chip';
-        rangeChip.setAttribute('role', 'button');
-        rangeChip.setAttribute('tabindex', '0');
-        rangeChip.setAttribute('aria-pressed', 'false');
-        rangeChip.setAttribute('data-filter', 'CUSTOM_RANGE');
-        rangeChip.textContent = 'Range';
-        filtersWrap.appendChild(rangeChip);
-
-        var dateRangeWrap = document.createElement('div');
-        dateRangeWrap.className = 'kanban-date-range';
-
-        var dateStart = document.createElement('input');
-        dateStart.type = 'date';
-        dateStart.id = 'kanban-date-start';
-        dateStart.className = 'kanban-date-input';
-        dateStart.setAttribute('aria-label', 'Close date from');
-
-        var dateEnd = document.createElement('input');
-        dateEnd.type = 'date';
-        dateEnd.id = 'kanban-date-end';
-        dateEnd.className = 'kanban-date-input';
-        dateEnd.setAttribute('aria-label', 'Close date to');
-
-        var applyBtn = document.createElement('div');
-        applyBtn.className = 'kanban-filter-apply';
-        applyBtn.setAttribute('role', 'button');
-        applyBtn.setAttribute('tabindex', '0');
-        applyBtn.textContent = 'Apply';
-        applyBtn.setAttribute('onclick', makeRangeApplyOnclick(hideEmptyCols));
-        applyBtn.onclick = function () {
-            applyRangeFilter(
-                document.getElementById('kanban-date-start').value,
-                document.getElementById('kanban-date-end').value
-            );
-        };
-
-        dateRangeWrap.appendChild(dateStart);
-        dateRangeWrap.appendChild(dateEnd);
-        dateRangeWrap.appendChild(applyBtn);
-        filtersWrap.appendChild(dateRangeWrap);
+        filtersWrap.appendChild(createUnifiedFilterChip(hideEmptyCols));
+        filtersWrap.appendChild(createSearchInput(hideEmptyCols));
 
         toolbar.appendChild(filtersWrap);
         toolbar.appendChild(createExpandButton());
 
+        if (container.parentNode) {
+            container.parentNode.insertBefore(createFilterApplyHook(hideEmptyCols), container);
+        } else {
+            container.appendChild(createFilterApplyHook(hideEmptyCols));
+        }
         container.appendChild(buildKpiRow());
         container.appendChild(toolbar);
 
@@ -665,8 +1194,21 @@
 
         container.appendChild(columnsDiv);
 
-        // Apply default filter so the board loads filtered to This Month
-        applyFilter('THIS_MONTH');
+        container.setAttribute(
+            'data-default-acct-periods',
+            (data.defaultAccountingPeriodIds || []).join(',')
+        );
+        container.setAttribute(
+            'data-default-quarter-periods',
+            (data.defaultQuarterPeriodIds || []).join(',')
+        );
+        container.setAttribute(
+            'data-closed-ranges',
+            encodeURIComponent(JSON.stringify(data.closedAccountingRanges || []))
+        );
+        container.setAttribute('onclick', makeClosePeriodPanelsOnclick());
+
+        applyAllFilters();
     }
 
     // ---- Init ----

@@ -26,13 +26,35 @@ define(['N/runtime', 'N/file', 'N/url', '../lib/queries'], (runtime, file, url, 
                 returnExternalUrl: false
             });
 
+            let periodFilters;
+            try {
+                periodFilters = queries.getCloseDatePeriodFilters();
+            } catch (periodErr) {
+                log.audit({
+                    title: 'OpportunityKanban.periodFilters',
+                    details: periodErr.message || periodErr
+                });
+                periodFilters = queries.emptyCloseDatePeriodFilters();
+            }
+            queries.markOpportunitiesInClosedPeriods(
+                opportunities,
+                periodFilters.closedAccountingRanges
+            );
+
             const kanbanData = {
                 columns: statusColumns,
                 opportunities: opportunities,
                 userId: userId,
                 selectedStatusIds: selectedStatusIds,
                 allowedStatusIds: selectedStatusIds,
-                updateUrl: updateUrl
+                updateUrl: updateUrl,
+                accountingPeriods: periodFilters.accountingPeriods,
+                quarterPeriods: periodFilters.quarterPeriods,
+                defaultAccountingPeriodIds: periodFilters.defaultAccountingPeriodIds,
+                defaultQuarterPeriodIds: periodFilters.defaultQuarterPeriodIds,
+                defaultRangeStartIso: periodFilters.defaultRangeStartIso,
+                defaultRangeEndIso: periodFilters.defaultRangeEndIso,
+                closedAccountingRanges: periodFilters.closedAccountingRanges
             };
 
             const clientFile = file.load({
@@ -142,32 +164,48 @@ define(['N/runtime', 'N/file', 'N/url', '../lib/queries'], (runtime, file, url, 
 .kanban-toolbar-filters {
     display: flex;
     align-items: center;
-    gap: 4px;
-    flex-wrap: wrap;
+    gap: 8px;
+    flex-wrap: nowrap;
     min-width: 0;
+    flex: 1 1 auto;
+}
+
+.kanban-period-dropdown {
+    position: relative;
+    display: inline-block;
+}
+
+.kanban-filter-chip-wrap {
+    display: inline-flex;
+    align-items: stretch;
+    max-width: 280px;
 }
 
 .kanban-filter-chip {
-    padding: 4px 14px;
-    border: 1px solid rgba(22, 21, 19, 0.2);
-    border-radius: 16px;
+    display: inline-flex;
+    align-items: center;
+    gap: 0;
+    padding: 4px 8px 4px 12px;
+    border: 1px solid #ccc;
+    border-radius: 3px 0 0 3px;
+    border-right: none;
     font-size: 12px;
     font-weight: 600;
     background: #fff;
-    color: #161513;
+    color: #555;
     cursor: pointer;
-    transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
-    display: inline-flex;
-    align-items: center;
+    line-height: 1.4;
     user-select: none;
     -webkit-user-select: none;
-    line-height: 1.4;
     white-space: nowrap;
+    min-width: 0;
+    flex: 1 1 auto;
+    overflow: hidden;
 }
 
 .kanban-filter-chip:hover {
-    background: #f5f4f2;
-    border-color: rgba(22, 21, 19, 0.35);
+    background: #f0f0f0;
+    border-color: #999;
 }
 
 .kanban-filter-chip:focus {
@@ -177,15 +215,192 @@ define(['N/runtime', 'N/file', 'N/url', '../lib/queries'], (runtime, file, url, 
 
 .kanban-filter-chip.active {
     background: #325c72;
-    color: #fff;
     border-color: #325c72;
+    color: #fff;
 }
 
-.kanban-date-range {
-    display: inline-flex;
+.kanban-filter-chip.active:hover {
+    background: #2a4f61;
+    border-color: #2a4f61;
+}
+
+.kanban-filter-chip-label {
+    flex-shrink: 0;
+}
+
+.kanban-filter-chip-sep {
+    margin: 0 8px;
+    padding-left: 8px;
+    border-left: 1px solid rgba(22, 21, 19, 0.2);
+    flex-shrink: 0;
+}
+
+.kanban-filter-chip.active .kanban-filter-chip-sep {
+    border-left-color: rgba(255, 255, 255, 0.45);
+}
+
+.kanban-filter-chip-value {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 140px;
+}
+
+.kanban-filter-chip-clear {
+    display: none;
     align-items: center;
-    gap: 4px;
-    margin-left: 4px;
+    justify-content: center;
+    padding: 4px 10px;
+    border: 1px solid #ccc;
+    border-left: none;
+    border-radius: 0 3px 3px 0;
+    font-size: 14px;
+    line-height: 1;
+    font-weight: 600;
+    background: #fff;
+    color: #555;
+    cursor: pointer;
+    user-select: none;
+    -webkit-user-select: none;
+    flex-shrink: 0;
+}
+
+.kanban-filter-chip-wrap.has-clear .kanban-filter-chip {
+    border-radius: 3px 0 0 3px;
+}
+
+.kanban-filter-chip-wrap.has-clear .kanban-filter-chip-clear {
+    display: inline-flex;
+}
+
+.kanban-filter-chip-wrap.has-clear.active .kanban-filter-chip-clear {
+    background: #325c72;
+    border-color: #325c72;
+    color: #fff;
+}
+
+.kanban-filter-chip-wrap.has-clear.active .kanban-filter-chip-clear:hover {
+    background: #2a4f61;
+    border-color: #2a4f61;
+}
+
+.kanban-filter-chip-wrap:not(.has-clear) .kanban-filter-chip {
+    border-right: 1px solid #ccc;
+    border-radius: 3px;
+}
+
+.kanban-filter-chip-wrap:not(.has-clear) .kanban-filter-chip.active {
+    border-right-color: #325c72;
+}
+
+.kanban-period-panel,
+.kanban-filter-panel {
+    display: none;
+    position: absolute;
+    top: calc(100% + 4px);
+    left: 0;
+    z-index: 100001;
+    min-width: 260px;
+    max-height: 320px;
+    overflow-y: auto;
+    background: #fff;
+    border: 1px solid rgba(22, 21, 19, 0.2);
+    border-radius: 6px;
+    box-shadow: 0 4px 16px rgba(22, 21, 19, 0.15);
+    padding: 0;
+}
+
+.kanban-filter-mode-bar {
+    display: flex;
+    gap: 0;
+    border-bottom: 1px solid rgba(22, 21, 19, 0.12);
+    padding: 8px 8px 0;
+}
+
+.kanban-filter-mode-btn {
+    flex: 1;
+    text-align: center;
+    padding: 6px 10px;
+    font-size: 11px;
+    font-weight: 600;
+    color: #555;
+    cursor: pointer;
+    border-radius: 4px 4px 0 0;
+    user-select: none;
+    -webkit-user-select: none;
+}
+
+.kanban-filter-mode-btn:hover {
+    background: #f5f4f2;
+    color: #161513;
+}
+
+.kanban-filter-mode-btn.active {
+    background: #eef3f6;
+    color: #325c72;
+    box-shadow: inset 0 -2px 0 #325c72;
+}
+
+.kanban-filter-period-list {
+    padding: 4px 0;
+    max-height: 160px;
+    overflow-y: auto;
+}
+
+.kanban-filter-range-list {
+    display: none;
+    flex-wrap: nowrap;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 12px 10px;
+}
+
+.kanban-search-input {
+    padding: 4px 8px;
+    border: 1px solid rgba(22, 21, 19, 0.2);
+    border-radius: 3px;
+    font-size: 12px;
+    font-family: inherit;
+    color: #161513;
+    min-width: 100px;
+    width: 160px;
+    flex: 1 1 160px;
+    max-width: 220px;
+}
+
+.kanban-search-input:focus {
+    outline: 2px solid #325c72;
+    outline-offset: 1px;
+}
+
+.kanban-search-input::placeholder {
+    color: #888;
+}
+
+.kanban-period-option {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 12px;
+    font-size: 12px;
+    color: #161513;
+    cursor: pointer;
+    white-space: nowrap;
+}
+
+.kanban-period-option:hover {
+    background: #f5f4f2;
+}
+
+.kanban-period-option input {
+    margin: 0;
+    cursor: pointer;
+}
+
+.kanban-date-range-label {
+    font-size: 12px;
+    font-weight: 600;
+    color: #555;
+    white-space: nowrap;
 }
 
 .kanban-date-input {
@@ -195,33 +410,21 @@ define(['N/runtime', 'N/file', 'N/url', '../lib/queries'], (runtime, file, url, 
     font-size: 12px;
     font-family: inherit;
     color: #161513;
-    max-width: 130px;
+    min-width: 0;
+    flex: 1 1 100px;
+    max-width: 118px;
+}
+
+.kanban-card-period-locked {
+    opacity: 0.72;
+    cursor: not-allowed;
+}
+
+.kanban-card-period-locked .kanban-card-tranid {
+    cursor: pointer;
 }
 
 .kanban-date-input:focus {
-    outline: 2px solid #325c72;
-    outline-offset: 1px;
-}
-
-.kanban-filter-apply {
-    padding: 4px 10px;
-    border: 1px solid #325c72;
-    border-radius: 16px;
-    font-size: 12px;
-    font-weight: 600;
-    background: #fff;
-    color: #325c72;
-    cursor: pointer;
-    line-height: 1.4;
-    user-select: none;
-    -webkit-user-select: none;
-}
-
-.kanban-filter-apply:hover {
-    background: #f0f4f6;
-}
-
-.kanban-filter-apply:focus {
     outline: 2px solid #325c72;
     outline-offset: 1px;
 }

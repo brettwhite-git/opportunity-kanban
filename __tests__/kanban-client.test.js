@@ -11,6 +11,26 @@
 
 const CLIENT_PATH = '../src/FileCabinet/SuiteApps/com.netsuite.opportunitykanban/portlet/kanban-client.js';
 
+function samplePeriodFilters() {
+    return {
+        accountingPeriods: [
+            { id: 'm1', name: 'Feb 2026', startIso: '2026-02-01', endIso: '2026-02-28', closed: false },
+            { id: 'm2', name: 'Mar 2026', startIso: '2026-03-01', endIso: '2026-03-31', closed: false },
+            { id: 'm3', name: 'Apr 2026', startIso: '2026-04-01', endIso: '2026-04-30', closed: false },
+            { id: 'm4', name: 'Jun 2026', startIso: '2026-06-01', endIso: '2026-06-30', closed: false }
+        ],
+        quarterPeriods: [
+            { id: 'q1', name: 'Q1 2026', startIso: '2026-01-01', endIso: '2026-03-31' },
+            { id: 'q2', name: 'Q2 2026', startIso: '2026-04-01', endIso: '2026-06-30' }
+        ],
+        defaultAccountingPeriodIds: ['m2'],
+        defaultQuarterPeriodIds: ['q1'],
+        defaultRangeStartIso: '2026-03-01',
+        defaultRangeEndIso: '2026-03-31',
+        closedAccountingRanges: [{ startIso: '2026-01-01', endIso: '2026-01-31' }]
+    };
+}
+
 function makeSampleData(overrides) {
     return Object.assign({
         columns: [
@@ -45,7 +65,8 @@ function makeSampleData(overrides) {
                 projectedtotal: '30000', title: 'Lost Deal'
             }
         ],
-        userId: 42
+        userId: 42,
+        ...samplePeriodFilters()
     }, overrides);
 }
 
@@ -53,6 +74,39 @@ function loadClient() {
     jest.isolateModules(() => {
         require(CLIENT_PATH);
     });
+}
+
+/** True when handler only clicks the hidden apply hook (checkbox, search). */
+function firesThroughApplyHookOnly(code) {
+    return code.indexOf('kanban-filter-apply-hook') >= 0
+        && code.indexOf('kanban-filter-mode') < 0
+        && code.indexOf('kanban-period-dropdown') < 0
+        && code.indexOf('data-period-id') < 0;
+}
+
+/** Fire inline portlet handler (production path). Delegates through apply-hook when present. */
+function fireHandler(el, attr, evt) {
+    var evtObj = evt || { stopPropagation() {} };
+    var code = el.getAttribute(attr);
+    if (code) {
+        if (firesThroughApplyHookOnly(code)) {
+            var hook = document.getElementById('kanban-filter-apply-hook');
+            if (hook) {
+                var hookCode = hook.getAttribute('onclick');
+                if (hookCode) {
+                    new Function('event', hookCode).call(hook, evtObj);
+                }
+            }
+            return;
+        }
+        new Function('event', code).call(el, evtObj);
+        return;
+    }
+    if (attr === 'oninput' && el.oninput) {
+        el.oninput.call(el, evtObj);
+    } else if (el.onclick) {
+        el.onclick.call(el, evtObj);
+    }
 }
 
 function setupDOM() {
@@ -177,44 +231,70 @@ describe('card display', () => {
     });
 });
 
-describe('date filter', () => {
-    it('renders filter chips and date range controls', () => {
+describe('close date filters', () => {
+    it('renders a single filter chip with period panel and date inputs', () => {
         window.KANBAN_DATA = makeSampleData();
         loadClient();
 
-        const chips = document.querySelectorAll('.kanban-filter-chip');
-        expect(chips.length).toBe(5);
-        expect(chips[0].textContent).toBe('This Month');
-        expect(chips[1].textContent).toBe('This Quarter');
-        expect(chips[2].textContent).toBe('Next Quarter');
-        expect(chips[3].textContent).toBe('Last Quarter');
-        expect(chips[4].textContent).toBe('Range');
-        expect(chips[0].tagName).toBe('DIV');
-        expect(chips[0].getAttribute('role')).toBe('button');
-        expect(chips[0].getAttribute('tabindex')).toBe('0');
-        expect(chips[0].classList.contains('active')).toBe(true);
-        expect(document.getElementById('kanban-date-start')).toBeTruthy();
-        expect(document.getElementById('kanban-date-end')).toBeTruthy();
-        expect(document.querySelector('.kanban-filter-apply').textContent).toBe('Apply');
+        expect(document.getElementById('kanban-filter-trigger')).toBeTruthy();
+        expect(document.getElementById('kanban-filter-chip-label')).toBeTruthy();
+        expect(document.getElementById('kanban-filter-chip-value')).toBeTruthy();
+        expect(document.getElementById('kanban-filter-chip-clear')).toBeTruthy();
+        expect(document.getElementById('kanban-filter-mode-range')).toBeTruthy();
+        expect(document.getElementById('kanban-acct-period-trigger')).toBeNull();
+        expect(document.getElementById('kanban-quarter-period-trigger')).toBeNull();
+        expect(document.querySelectorAll('.kanban-toolbar-filters .kanban-period-dropdown').length).toBe(1);
+        expect(document.querySelectorAll('.kanban-period-cb[data-period-group="acct"]').length).toBe(4);
+        expect(document.querySelectorAll('.kanban-period-cb[data-period-group="quarter"]').length).toBe(2);
+        expect(document.getElementById('kanban-filter-range-list').contains(document.getElementById('kanban-date-start'))).toBe(true);
+        expect(document.querySelector('.kanban-filter-date-section')).toBeNull();
+        expect(document.querySelector('.kanban-filter-apply')).toBeNull();
     });
 
-    it('has self-contained onclick attribute (no function references)', () => {
+    it('period checkbox onclick triggers hidden apply hook (portlet-safe)', () => {
         window.KANBAN_DATA = makeSampleData();
         loadClient();
 
-        const btn = document.querySelector('.kanban-filter-chip[data-filter="THIS_MONTH"]');
-        const onclick = btn.getAttribute('onclick');
-        expect(onclick).toContain("var f='THIS_MONTH'");
-        expect(onclick).toContain('querySelectorAll');
-        expect(onclick).toContain('data-cg');
-        expect(onclick).toContain('indexOf');
-        expect(onclick).toContain('kanban-date-start');
-        // Must NOT reference any custom function
-        expect(onclick).not.toContain('_kanbanFilter');
-        expect(onclick).not.toContain('_kanbanCardClick');
+        const onclick = document.querySelector('.kanban-period-cb').getAttribute('onclick');
+        expect(onclick).toContain('kanban-filter-apply-hook');
+        const hookOnclick = document.getElementById('kanban-filter-apply-hook').getAttribute('onclick');
+        expect(hookOnclick).toContain('data-close-date');
+        expect(hookOnclick).toContain('kpi-count');
     });
 
-    it('sets data-close-date on cards for range filtering', () => {
+    it('closes period panels when clicking outside the dropdown', () => {
+        window.KANBAN_DATA = makeSampleData();
+        loadClient();
+
+        const panel = document.getElementById('kanban-filter-panel');
+        const container = document.getElementById('kanban-board-container');
+        const valueBefore = document.getElementById('kanban-filter-chip-value').textContent;
+        panel.style.display = 'block';
+
+        expect(container.getAttribute('onclick')).toContain('kanban-period-dropdown');
+        expect(container.getAttribute('onclick')).toContain('kanban-filter-apply-hook');
+        fireHandler(container, 'onclick', { target: document.querySelector('.kanban-column') });
+
+        expect(panel.style.display).toBe('none');
+        expect(document.getElementById('kanban-filter-chip-value').textContent).toBe(valueBefore);
+    });
+
+    it('keeps period panel open when clicking inside the dropdown', () => {
+        window.KANBAN_DATA = makeSampleData();
+        loadClient();
+
+        const panel = document.getElementById('kanban-filter-panel');
+        const container = document.getElementById('kanban-board-container');
+        panel.style.display = 'block';
+
+        fireHandler(container, 'onclick', {
+            target: document.querySelector('.kanban-period-cb')
+        });
+
+        expect(panel.style.display).toBe('block');
+    });
+
+    it('sets data-close-date on cards', () => {
         window.KANBAN_DATA = makeSampleData();
         loadClient();
 
@@ -222,13 +302,9 @@ describe('date filter', () => {
         expect(card.getAttribute('data-close-date')).toBe('2026-03-15');
     });
 
-    it('filters by custom close date range via Apply', () => {
+    it('defaults to current accounting period in accounting mode', () => {
         window.KANBAN_DATA = makeSampleData();
         loadClient();
-
-        document.getElementById('kanban-date-start').value = '2026-03-01';
-        document.getElementById('kanban-date-end').value = '2026-03-31';
-        document.querySelector('.kanban-filter-apply').click();
 
         const cards = document.querySelectorAll('.kanban-card');
         expect(cards[0].style.display).toBe('');
@@ -236,172 +312,130 @@ describe('date filter', () => {
         expect(cards[2].style.display).toBe('');
         expect(cards[3].style.display).toBe('');
         expect(document.getElementById('kpi-count').textContent).toBe('3');
-        expect(document.querySelector('.kanban-filter-chip.active').getAttribute('data-filter')).toBe('CUSTOM_RANGE');
+        expect(document.getElementById('kanban-filter-chip-label').textContent).toBe('Accounting');
+        expect(document.getElementById('kanban-filter-chip-value').textContent).toBe('Mar 2026');
+        expect(document.getElementById('kanban-filter-mode').value).toBe('acct');
     });
 
-    it('preset filter clears range chip active state', () => {
+    it('uses only quarter periods when quarter mode is selected', () => {
+        window.KANBAN_DATA = makeSampleData();
+        loadClient();
+
+        fireHandler(document.getElementById('kanban-filter-mode-quarter'), 'onclick');
+
+        const cards = document.querySelectorAll('.kanban-card');
+        expect(cards[0].style.display).toBe('');
+        expect(cards[1].style.display).toBe('none');
+        expect(cards[2].style.display).toBe('');
+        expect(cards[3].style.display).toBe('');
+        expect(document.getElementById('kpi-count').textContent).toBe('3');
+    });
+
+    it('filters when accounting period checkboxes change', () => {
+        window.KANBAN_DATA = makeSampleData();
+        loadClient();
+
+        document.querySelectorAll('.kanban-period-cb').forEach((cb) => { cb.checked = false; });
+        document.querySelector('.kanban-period-cb[data-period-group="acct"][data-start="2026-02-01"]').checked = true;
+        fireHandler(document.querySelector('.kanban-period-cb[data-period-group="acct"][data-start="2026-02-01"]'), 'onclick');
+
+        const cards = document.querySelectorAll('.kanban-card');
+        expect(cards[0].style.display).toBe('none');
+        expect(cards[1].style.display).toBe('none');
+    });
+
+    it('supports multi-select accounting periods (OR)', () => {
+        window.KANBAN_DATA = makeSampleData();
+        loadClient();
+
+        document.querySelector('.kanban-period-cb[data-period-group="acct"][data-start="2026-03-01"]').checked = true;
+        document.querySelector('.kanban-period-cb[data-period-group="acct"][data-start="2026-06-01"]').checked = true;
+        fireHandler(document.querySelector('.kanban-period-cb[data-period-group="acct"][data-start="2026-06-01"]'), 'onclick');
+
+        const cards = document.querySelectorAll('.kanban-card');
+        expect(cards[0].style.display).toBe('');
+        expect(cards[1].style.display).toBe('');
+    });
+
+    it('filters by close date range in Close date tab when both dates are set', () => {
+        window.KANBAN_DATA = makeSampleData();
+        loadClient();
+
+        fireHandler(document.getElementById('kanban-filter-mode-range'), 'onclick');
+
+        const start = document.getElementById('kanban-date-start');
+        const end = document.getElementById('kanban-date-end');
+        start.value = '2026-03-01';
+        fireHandler(start, 'onchange');
+        end.value = '2026-03-31';
+        fireHandler(end, 'onchange');
+
+        const cards = document.querySelectorAll('.kanban-card');
+        expect(cards[0].style.display).toBe('');
+        expect(cards[1].style.display).toBe('none');
+        expect(document.getElementById('kpi-count').textContent).toBe('3');
+        expect(document.getElementById('kanban-filter-chip-label').textContent).toBe('Close date');
+        expect(document.getElementById('kanban-filter-chip-value').textContent).toContain('03/01/2026');
+    });
+
+    it('does not apply date range while in Accounting mode (mode-exclusive)', () => {
         window.KANBAN_DATA = makeSampleData();
         loadClient();
 
         document.getElementById('kanban-date-start').value = '2026-06-01';
         document.getElementById('kanban-date-end').value = '2026-06-30';
-        document.querySelector('.kanban-filter-apply').click();
-        expect(document.querySelector('.kanban-filter-chip[data-filter="CUSTOM_RANGE"]').classList.contains('active')).toBe(true);
 
-        document.querySelector('.kanban-filter-chip[data-filter="THIS_MONTH"]').click();
-        expect(document.querySelector('.kanban-filter-chip[data-filter="CUSTOM_RANGE"]').classList.contains('active')).toBe(false);
-        expect(document.getElementById('kanban-date-start').value).toBe('');
+        expect(document.querySelector('.kanban-card[data-opp-id="101"]').style.display).toBe('none');
     });
 
-    it('range Apply onclick is self-contained', () => {
+    it('clear control resets active tab to defaults', () => {
         window.KANBAN_DATA = makeSampleData();
         loadClient();
 
-        const onclick = document.querySelector('.kanban-filter-apply').getAttribute('onclick');
-        expect(onclick).toContain('data-close-date');
-        expect(onclick).toContain('CUSTOM_RANGE');
-        expect(onclick).toContain('kpi-count');
+        document.querySelectorAll('.kanban-period-cb[data-period-group="acct"]').forEach((cb) => { cb.checked = false; });
+        document.querySelector('.kanban-period-cb[data-period-group="acct"][data-start="2026-06-01"]').checked = true;
+        fireHandler(document.querySelector('.kanban-period-cb[data-period-group="acct"][data-start="2026-06-01"]'), 'onclick');
+
+        fireHandler(document.getElementById('kanban-filter-chip-clear'), 'onclick');
+
+        expect(document.getElementById('kanban-filter-chip-value').textContent).toBe('Mar 2026');
+        expect(document.querySelector('.kanban-card[data-opp-id="101"]').style.display).toBe('none');
     });
 
-    it('sets aria-pressed on active filter button', () => {
+    it('filter clear onclick is self-contained', () => {
         window.KANBAN_DATA = makeSampleData();
         loadClient();
 
-        const buttons = document.querySelectorAll('.kanban-filter-chip');
-        // This Month is default active
-        expect(buttons[0].getAttribute('aria-pressed')).toBe('true');
-        expect(buttons[1].getAttribute('aria-pressed')).toBe('false');
+        const onclick = document.getElementById('kanban-filter-chip-clear').getAttribute('onclick');
+        expect(onclick).toContain('data-period-id');
+        expect(onclick).toContain('kanban-filter-apply-hook');
     });
 
-    it('filters cards when switching filters', () => {
-        window.KANBAN_DATA = makeSampleData({
-            opportunities: [
-                {
-                    id: '100', tranid: 'OPP-001', companyname: 'Near Corp',
-                    entitystatus: '6', entitystatusText: 'Proposal', probability: '50',
-                    expectedclosedate: '2/15/2026', closeDateGroup: 'THIS_MONTH THIS_QUARTER',
-                    projectedtotal: '10000', title: 'Near'
-                },
-                {
-                    id: '101', tranid: 'OPP-002', companyname: 'Quarter Corp',
-                    entitystatus: '6', entitystatusText: 'Proposal', probability: '25',
-                    expectedclosedate: '3/15/2026', closeDateGroup: 'THIS_QUARTER',
-                    projectedtotal: '50000', title: 'Quarter'
-                }
-            ]
-        });
-        loadClient();
-
-        var cards = document.querySelectorAll('.kanban-card');
-        // Default THIS_MONTH filter: Near visible (has THIS_MONTH), Quarter hidden
-        expect(cards[0].style.display).toBe('');
-        expect(cards[1].style.display).toBe('none');
-
-        // Switch to THIS_QUARTER — both visible (inclusive)
-        document.querySelector('.kanban-filter-chip[data-filter="THIS_QUARTER"]').click();
-        expect(cards[0].style.display).toBe('');
-        expect(cards[1].style.display).toBe('');
-    });
-
-    it('inclusive filter shows card in multiple groups', () => {
-        window.KANBAN_DATA = makeSampleData({
-            opportunities: [
-                {
-                    id: '100', tranid: 'OPP-001', companyname: 'Both Corp',
-                    entitystatus: '6', entitystatusText: 'Proposal', probability: '50',
-                    expectedclosedate: '2/15/2026', closeDateGroup: 'THIS_MONTH THIS_QUARTER',
-                    projectedtotal: '10000', title: 'Both'
-                }
-            ]
-        });
-        loadClient();
-
-        var card = document.querySelector('.kanban-card');
-
-        // Visible under THIS_MONTH (default)
-        expect(card.style.display).toBe('');
-
-        // Visible under THIS_QUARTER too
-        document.querySelector('.kanban-filter-chip[data-filter="THIS_QUARTER"]').click();
-        expect(card.style.display).toBe('');
-
-        // Hidden under NEXT_QUARTER
-        document.querySelector('.kanban-filter-chip[data-filter="NEXT_QUARTER"]').click();
-        expect(card.style.display).toBe('none');
-    });
-
-    it('updates column counts on filter', () => {
-        window.KANBAN_DATA = makeSampleData({
-            opportunities: [
-                {
-                    id: '100', tranid: 'OPP-001', companyname: 'Near Corp',
-                    entitystatus: '6', entitystatusText: 'Proposal', probability: '50',
-                    expectedclosedate: '2/15/2026', closeDateGroup: 'THIS_MONTH THIS_QUARTER',
-                    projectedtotal: '10000', title: 'Near'
-                },
-                {
-                    id: '101', tranid: 'OPP-002', companyname: 'Quarter Corp',
-                    entitystatus: '6', entitystatusText: 'Proposal', probability: '25',
-                    expectedclosedate: '3/15/2026', closeDateGroup: 'THIS_QUARTER',
-                    projectedtotal: '50000', title: 'Quarter'
-                }
-            ]
-        });
-        loadClient();
-
-        // Default THIS_MONTH: 1 card visible
-        expect(document.querySelector('.kanban-column-count').textContent).toBe('1');
-
-        // Switch to THIS_QUARTER: 2 cards visible
-        document.querySelector('.kanban-filter-chip[data-filter="THIS_QUARTER"]').click();
-        expect(document.querySelector('.kanban-column-count').textContent).toBe('2');
-    });
-
-    it('inline onclick filter keeps columns visible when status param is set', () => {
+    it('portlet filter keeps columns visible when status param is set', () => {
         window.KANBAN_DATA = makeSampleData({
             selectedStatusIds: ['6', '7', '8', '9'],
             allowedStatusIds: ['6', '7', '8', '9']
         });
         loadClient();
 
-        const btn = document.querySelector('.kanban-filter-chip[data-filter="THIS_QUARTER"]');
-        const onclick = btn.getAttribute('onclick');
-        expect(onclick).toContain("cols[k].style.display=(hideEmpty&&n===0)?'none':''");
+        const checkbox = document.querySelector('.kanban-period-cb');
+        expect(checkbox.getAttribute('onclick')).toContain('kanban-filter-apply-hook');
+        fireHandler(checkbox, 'onclick');
 
-        new Function('event', onclick).call(btn, {});
-
-        const columns = document.querySelectorAll('.kanban-column');
-        expect(columns.length).toBeGreaterThan(0);
-        columns.forEach((col) => {
+        document.querySelectorAll('.kanban-column').forEach((col) => {
             expect(col.style.display).not.toBe('none');
         });
-    });
-
-    it('highlights the active filter button', () => {
-        window.KANBAN_DATA = makeSampleData();
-        loadClient();
-
-        // Default: This Month is active
-        var activeBtn = document.querySelector('.kanban-filter-chip.active');
-        expect(activeBtn.getAttribute('data-filter')).toBe('THIS_MONTH');
-
-        // Switch to Next Quarter
-        document.querySelector('.kanban-filter-chip[data-filter="NEXT_QUARTER"]').click();
-        activeBtn = document.querySelector('.kanban-filter-chip.active');
-        expect(activeBtn.getAttribute('data-filter')).toBe('NEXT_QUARTER');
-        expect(activeBtn.getAttribute('aria-pressed')).toBe('true');
     });
 
     it('hides columns with no visible cards', () => {
         window.KANBAN_DATA = makeSampleData();
         loadClient();
 
-        // Default THIS_MONTH: Proposal visible, Negotiation hidden, Closed Won visible, Closed Lost visible
-        var cols = document.querySelectorAll('.kanban-column');
-        expect(cols[0].style.display).toBe('');      // Proposal (has THIS_MONTH card)
-        expect(cols[1].style.display).toBe('none');   // Negotiation (only NEXT_QUARTER)
-        expect(cols[2].style.display).toBe('');       // Closed Won (THIS_MONTH)
-        expect(cols[3].style.display).toBe('');       // Closed Lost (THIS_MONTH)
+        const cols = document.querySelectorAll('.kanban-column');
+        expect(cols[0].style.display).toBe('');
+        expect(cols[1].style.display).toBe('none');
+        expect(cols[2].style.display).toBe('');
+        expect(cols[3].style.display).toBe('');
     });
 });
 
@@ -475,8 +509,10 @@ describe('KPI cards', () => {
         window.KANBAN_DATA = makeSampleData();
         loadClient();
 
-        // Switch to NEXT_QUARTER — only OPP-002 (Negotiation, $2,500,000, open)
-        document.querySelector('.kanban-filter-chip[data-filter="NEXT_QUARTER"]').click();
+        document.querySelectorAll('.kanban-period-cb').forEach((cb) => { cb.checked = false; });
+        document.querySelector('.kanban-period-cb[data-period-group="acct"][data-start="2026-06-01"]').checked = true;
+        fireHandler(document.querySelector('.kanban-period-cb[data-period-group="acct"][data-start="2026-06-01"]'), 'onclick');
+
         expect(document.getElementById('kpi-count').textContent).toBe('1');
         expect(document.getElementById('kpi-open').textContent).toBe('$2,500,000');
         expect(document.getElementById('kpi-won').textContent).toBe('$0');
@@ -530,17 +566,15 @@ describe('KPI cards', () => {
         expect(cards[1].getAttribute('data-status-type')).toBe('lost');
     });
 
-    it('filter onclick string includes KPI recalculation', () => {
+    it('period filter applyFilters updates KPI counts', () => {
         window.KANBAN_DATA = makeSampleData();
         loadClient();
 
-        const btn = document.querySelector('.kanban-filter-chip[data-filter="THIS_MONTH"]');
-        const onclick = btn.getAttribute('onclick');
-        expect(onclick).toContain('data-status-type');
-        expect(onclick).toContain('kpi-count');
-        expect(onclick).toContain('kpi-open');
-        expect(onclick).toContain('kpi-won');
-        expect(onclick).toContain('kpi-lost');
+        document.querySelectorAll('.kanban-period-cb').forEach((cb) => { cb.checked = false; });
+        document.querySelector('.kanban-period-cb[data-period-group="acct"][data-start="2026-06-01"]').checked = true;
+        fireHandler(document.querySelector('.kanban-period-cb[data-period-group="acct"][data-start="2026-06-01"]'), 'onclick');
+
+        expect(document.getElementById('kpi-count').textContent).toBe('1');
     });
 });
 
@@ -604,7 +638,36 @@ describe('drag and drop attribute strings', () => {
         expect(card.getAttribute('ondragend')).toContain("kanban-drop-hover");
     });
 
-    it('ondrop recounts only visible cards for active filter', () => {
+    it('moves the card to the target column immediately on drop (before save completes)', () => {
+        window.KANBAN_DATA = makeSampleData({
+            updateUrl: '/app/site/hosting/scriptlet.nl?script=99&deploy=1',
+            allowedStatusIds: ['6', '7'],
+            selectedStatusIds: ['6', '7']
+        });
+        loadClient();
+
+        let resolveFetch;
+        global.fetch = jest.fn().mockReturnValue(new Promise((resolve) => {
+            resolveFetch = resolve;
+        }));
+
+        const card = document.querySelector('.kanban-card[data-opp-id="100"]');
+        const targetBody = document.querySelector('.kanban-column[data-status="7"] .kanban-column-body');
+        const ondrop = targetBody.getAttribute('ondrop');
+        new Function('event', ondrop).call(targetBody, {
+            preventDefault() {},
+            stopPropagation() {},
+            dataTransfer: { getData: () => '100' }
+        });
+
+        expect(card.parentNode).toBe(targetBody);
+        expect(card.getAttribute('data-saving')).toBe('1');
+
+        resolveFetch({ json: () => Promise.resolve({ ok: true, entitystatusText: 'Negotiation' }) });
+        delete global.fetch;
+    });
+
+    it('ondrop recounts only visible cards for active filter', async () => {
         window.KANBAN_DATA = makeSampleData({
             columns: [
                 { id: '6', name: 'Proposal' },
@@ -642,8 +705,10 @@ describe('drag and drop attribute strings', () => {
         new Function('event', ondrop).call(targetBody, {
             preventDefault() {},
             stopPropagation() {},
-            dataTransfer: { getData: () => '100' }
+            dataTransfer: { getData: () => '101' }
         });
+
+        await new Promise((resolve) => { setTimeout(resolve, 0); });
 
         expect(sourceCount.textContent).toBe('0');
         expect(document.querySelector('.kanban-column[data-status="7"] .kanban-column-count').textContent).toBe('1');
@@ -718,6 +783,45 @@ describe('drag and drop attribute strings', () => {
         expect((ondrop.match(/kpi-open/g) || []).length).toBe(1);
     });
 
+    it('ondrop blocks cards in closed accounting periods', () => {
+        window.KANBAN_DATA = makeSampleData({
+            updateUrl: '/app/site/hosting/scriptlet.nl?script=99&deploy=1',
+            allowedStatusIds: ['6', '7'],
+            selectedStatusIds: ['6', '7'],
+            opportunities: [
+                {
+                    id: '100', tranid: 'OPP-001', companyname: 'Locked Corp',
+                    entitystatus: '6', entitystatusText: 'Proposal', probability: '50',
+                    expectedclosedate: '1/15/2026', closeDateGroup: 'THIS_MONTH',
+                    projectedtotal: '10000', title: 'Locked', isInClosedPeriod: true
+                }
+            ],
+            columns: [
+                { id: '6', name: 'Proposal' },
+                { id: '7', name: 'Negotiation' }
+            ]
+        });
+        loadClient();
+
+        const card = document.querySelector('.kanban-card');
+        expect(card.getAttribute('draggable')).toBeNull();
+        expect(card.getAttribute('data-period-locked')).toBe('1');
+
+        global.fetch = jest.fn();
+        window.alert = jest.fn();
+        const targetBody = document.querySelector('.kanban-column[data-status="7"] .kanban-column-body');
+        const ondrop = targetBody.getAttribute('ondrop');
+        expect(ondrop).toContain('data-period-locked');
+        new Function('event', ondrop).call(targetBody, {
+            preventDefault() {},
+            stopPropagation() {},
+            dataTransfer: { getData: () => '100' }
+        });
+        expect(global.fetch).not.toHaveBeenCalled();
+        delete global.fetch;
+        delete window.alert;
+    });
+
     it('renders empty param-driven columns', () => {
         window.KANBAN_DATA = makeSampleData({
             columns: [
@@ -731,5 +835,104 @@ describe('drag and drop attribute strings', () => {
         });
         loadClient();
         expect(document.querySelectorAll('.kanban-column')).toHaveLength(2);
+    });
+});
+
+describe('filter chip UX', () => {
+    it('places search input to the right of the period filter chip', () => {
+        window.KANBAN_DATA = makeSampleData();
+        loadClient();
+
+        const filters = document.querySelector('.kanban-toolbar-filters');
+        const children = Array.from(filters.children);
+        expect(children[0].classList.contains('kanban-period-dropdown')).toBe(true);
+        expect(children[1].id).toBe('kanban-search');
+    });
+
+    it('chip separator has no pipe character', () => {
+        window.KANBAN_DATA = makeSampleData();
+        loadClient();
+        const sep = document.getElementById('kanban-filter-chip-sep');
+        expect(sep.textContent).toBe('');
+    });
+
+    it('renders hidden filter apply hook for portlet-safe handlers', () => {
+        window.KANBAN_DATA = makeSampleData();
+        loadClient();
+        const hook = document.getElementById('kanban-filter-apply-hook');
+        expect(hook).toBeTruthy();
+        expect(hook.getAttribute('onclick')).toContain('kanban-filter-chip-value');
+    });
+
+    it('filter trigger opens panel via self-contained onclick', () => {
+        window.KANBAN_DATA = makeSampleData();
+        loadClient();
+        const panel = document.getElementById('kanban-filter-panel');
+        expect(panel.style.display).toBe('none');
+        fireHandler(document.getElementById('kanban-filter-trigger'), 'onclick');
+        expect(panel.style.display).toBe('block');
+    });
+
+    it('switching to Close date fills default range when inputs are empty', () => {
+        window.KANBAN_DATA = makeSampleData();
+        loadClient();
+        fireHandler(document.getElementById('kanban-filter-mode-range'), 'onclick');
+        expect(document.getElementById('kanban-date-start').value).toBe('2026-03-01');
+        expect(document.getElementById('kanban-date-end').value).toBe('2026-03-31');
+    });
+
+    it('search input filters cards by tranid and company', () => {
+        window.KANBAN_DATA = makeSampleData();
+        loadClient();
+        document.querySelectorAll('.kanban-period-cb').forEach((cb) => { cb.checked = false; });
+        const search = document.getElementById('kanban-search');
+        search.value = 'acme';
+        fireHandler(search, 'oninput');
+        const cards = document.querySelectorAll('.kanban-card');
+        expect(cards[0].style.display).toBe('');
+        expect(cards[1].style.display).toBe('none');
+    });
+
+    it('period checkbox onclick filters cards via apply hook', () => {
+        window.KANBAN_DATA = makeSampleData();
+        loadClient();
+        document.querySelectorAll('.kanban-period-cb').forEach((box) => { box.checked = false; });
+        const cb = document.querySelector('.kanban-period-cb[data-period-id="m4"]');
+        expect(cb.getAttribute('onclick')).toContain('kanban-filter-apply-hook');
+        cb.checked = true;
+        fireHandler(cb, 'onclick');
+        expect(document.querySelector('.kanban-card[data-opp-id="100"]').style.display).toBe('none');
+        expect(document.querySelector('.kanban-card[data-opp-id="101"]').style.display).toBe('');
+    });
+
+    it('click-outside dismiss re-applies filters and keeps default period on chip', () => {
+        window.KANBAN_DATA = makeSampleData();
+        loadClient();
+
+        fireHandler(document.getElementById('kanban-filter-trigger'), 'onclick');
+        document.getElementById('kanban-filter-panel').style.display = 'block';
+
+        document.querySelectorAll('.kanban-period-cb[data-period-group="acct"]').forEach((cb) => {
+            cb.checked = false;
+        });
+
+        const container = document.getElementById('kanban-board-container');
+        expect(container.getAttribute('onclick')).toContain('kanban-filter-apply-hook');
+
+        fireHandler(container, 'onclick', { target: document.querySelector('.kanban-columns') });
+
+        expect(document.getElementById('kanban-filter-chip-value').textContent).toBe('Mar 2026');
+        expect(document.querySelector('.kanban-period-cb[data-period-group="acct"]:checked')).toBeTruthy();
+    });
+
+    it('scrolls checked period into view when filter panel opens', () => {
+        window.KANBAN_DATA = makeSampleData();
+        loadClient();
+        const list = document.getElementById('kanban-filter-acct-list');
+        const checked = list.querySelector('.kanban-period-cb:checked');
+        const row = checked.parentElement;
+        row.scrollIntoView = jest.fn();
+        fireHandler(document.getElementById('kanban-filter-trigger'), 'onclick');
+        expect(row.scrollIntoView).toHaveBeenCalled();
     });
 });
