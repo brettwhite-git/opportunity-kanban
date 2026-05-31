@@ -2,7 +2,7 @@
  * @NApiVersion 2.1
  * @NModuleScope SameAccount
  */
-define(['N/search'], (search) => {
+define(['N/search', 'N/query'], (search, query) => {
 
     /**
      * Normalizes an admin-entered status filter into valid NetSuite internal IDs.
@@ -35,6 +35,115 @@ define(['N/search'], (search) => {
      */
 
     /**
+     * Loads display names for opportunity entity status internal IDs.
+     * Param-driven columns need this when a rep has no opportunities in a status
+     * (names cannot be inferred from opportunity search rows alone).
+     *
+     * @param {Array<string|number>} statusIds - Status internal IDs
+     * @returns {Object<string, string>} Map of status id -> name
+     */
+    const applyStatusName = (nameById, statusId, name) => {
+        if (statusId && name) {
+            nameById[String(statusId)] = String(name);
+        }
+    };
+
+    const loadEntityStatusNamesFromSuiteQL = (statusIds, nameById) => {
+        if (!statusIds.length) {
+            return;
+        }
+        const placeholders = statusIds.map(() => '?').join(',');
+        const rows = query.runSuiteQL({
+            query: 'SELECT key, name FROM entitystatus WHERE key IN (' + placeholders + ')',
+            params: statusIds.slice()
+        }).asMappedResults();
+        rows.forEach((row) => {
+            applyStatusName(nameById, row.key, row.name);
+        });
+    };
+
+    /**
+     * Resolves status labels from opportunities in the account (no salesrep filter).
+     * entitystatus is not a loadable record type in SuiteScript; search/SuiteQL only.
+     *
+     * @param {Array<string>} statusIds
+     * @param {Object<string, string>} nameById
+     */
+    const loadEntityStatusNamesFromOpportunitySearch = (statusIds, nameById) => {
+        if (!statusIds.length) {
+            return;
+        }
+        search.create({
+            type: search.Type.OPPORTUNITY,
+            filters: [['entitystatus', 'anyof', statusIds]],
+            columns: [
+                search.createColumn({
+                    name: 'entitystatus',
+                    summary: search.Summary.GROUP,
+                    sort: search.Sort.ASC
+                })
+            ]
+        }).run().each((result) => {
+            const statusId = result.getValue({
+                name: 'entitystatus',
+                summary: search.Summary.GROUP
+            });
+            const statusName = result.getText({
+                name: 'entitystatus',
+                summary: search.Summary.GROUP
+            });
+            applyStatusName(nameById, statusId, statusName);
+            return true;
+        });
+    };
+
+    const loadEntityStatusNames = (statusIds) => {
+        const normalized = normalizeStatusIds(statusIds);
+        const nameById = {};
+        if (normalized.length === 0) {
+            return nameById;
+        }
+
+        try {
+            try {
+                loadEntityStatusNamesFromSuiteQL(normalized, nameById);
+            } catch (suiteQlErr) {
+                log.debug({
+                    title: 'loadEntityStatusNames.suiteql',
+                    details: suiteQlErr.message || suiteQlErr
+                });
+            }
+
+            const missingAfterSuiteQl = normalized.filter((id) => !nameById[id]);
+            if (missingAfterSuiteQl.length > 0) {
+                try {
+                    loadEntityStatusNamesFromOpportunitySearch(missingAfterSuiteQl, nameById);
+                } catch (searchErr) {
+                    log.debug({
+                        title: 'loadEntityStatusNames.oppSearch',
+                        details: searchErr.message || searchErr
+                    });
+                }
+            }
+
+            const unresolved = normalized.filter((id) => !nameById[id]);
+            if (unresolved.length > 0) {
+                log.audit({
+                    title: 'loadEntityStatusNames.unresolved',
+                    details: unresolved.join(',')
+                });
+            }
+        } catch (err) {
+            log.error({
+                title: 'loadEntityStatusNames',
+                details: err.message || err
+            });
+        }
+
+        return nameById;
+    };
+
+    /**
      * Builds kanban columns from deployment status IDs when configured; otherwise
      * derives columns from opportunities that have data.
      *
@@ -47,7 +156,7 @@ define(['N/search'], (search) => {
             return deriveStatusColumns(opportunities);
         }
 
-        const nameById = {};
+        const nameById = loadEntityStatusNames(statusIds);
         opportunities.forEach((opp) => {
             const statusId = String(opp.entitystatus || '');
             if (statusId && opp.entitystatusText) {
@@ -331,6 +440,7 @@ define(['N/search'], (search) => {
     return {
         buildStatusColumns,
         deriveStatusColumns,
+        loadEntityStatusNames,
         emptyCloseDatePeriodFilters,
         getCloseDatePeriodFilters,
         getOpportunitiesByUser,

@@ -1,5 +1,6 @@
 import queries from 'SuiteScripts/lib/queries';
 import search from 'N/search';
+import query from 'N/query';
 
 beforeEach(() => {
     jest.restoreAllMocks();
@@ -25,6 +26,36 @@ function makeResult(id, valueMap, textMap) {
         getValue: jest.fn((opts) => (valueMap[opts.name] || '')),
         getText: jest.fn((opts) => (textMap && textMap[opts.name]) || '')
     };
+}
+
+function mockSuiteQLStatusNames(rows) {
+    jest.spyOn(query, 'runSuiteQL').mockReturnValue({
+        asMappedResults: () => rows
+    });
+}
+
+function mockOpportunityStatusGroupSearch(statusRows) {
+    jest.spyOn(search, 'create').mockReturnValue({
+        run: () => ({
+            each: (callback) => {
+                statusRows.forEach(({ id, name }) => {
+                    callback({
+                        getValue: jest.fn((opts) => (
+                            opts.name === 'entitystatus' && opts.summary === search.Summary.GROUP
+                                ? id
+                                : ''
+                        )),
+                        getText: jest.fn((opts) => (
+                            opts.name === 'entitystatus' && opts.summary === search.Summary.GROUP
+                                ? name
+                                : ''
+                        ))
+                    });
+                });
+                return true;
+            }
+        })
+    });
 }
 
 describe('deriveStatusColumns', () => {
@@ -64,15 +95,83 @@ describe('deriveStatusColumns', () => {
 });
 
 
+describe('loadEntityStatusNames', () => {
+    it('loads names from SuiteQL entitystatus rows', () => {
+        mockSuiteQLStatusNames([
+            { key: '7', name: 'Negotiation' },
+            { key: '8', name: 'In Discussion' }
+        ]);
+        const names = queries.loadEntityStatusNames(['8', '7']);
+
+        expect(query.runSuiteQL).toHaveBeenCalled();
+        expect(names).toEqual({ '7': 'Negotiation', '8': 'In Discussion' });
+    });
+
+    it('falls back to grouped opportunity search when SuiteQL fails', () => {
+        jest.spyOn(query, 'runSuiteQL').mockImplementation(() => {
+            throw new Error('SuiteQL unavailable');
+        });
+        mockOpportunityStatusGroupSearch([
+            { id: '9', name: 'Closed Won' },
+            { id: '10', name: 'Closed Lost' }
+        ]);
+
+        const names = queries.loadEntityStatusNames(['9', '10']);
+
+        expect(search.create).toHaveBeenCalledWith(
+            expect.objectContaining({
+                type: search.Type.OPPORTUNITY,
+                filters: [['entitystatus', 'anyof', ['9', '10']]]
+            })
+        );
+        expect(names).toEqual({ '9': 'Closed Won', '10': 'Closed Lost' });
+    });
+
+    it('returns an empty object when no status IDs are provided', () => {
+        const suiteQlSpy = jest.spyOn(query, 'runSuiteQL');
+        expect(queries.loadEntityStatusNames([])).toEqual({});
+        expect(suiteQlSpy).not.toHaveBeenCalled();
+    });
+
+    it('fills remaining ids from grouped opportunity search after partial SuiteQL', () => {
+        mockSuiteQLStatusNames([{ key: '9', name: 'Closed Won' }]);
+        mockOpportunityStatusGroupSearch([{ id: '10', name: 'Closed Lost' }]);
+
+        const names = queries.loadEntityStatusNames(['9', '10']);
+
+        expect(names).toEqual({ '9': 'Closed Won', '10': 'Closed Lost' });
+    });
+});
+
 describe('buildStatusColumns', () => {
     it('returns param-driven columns including empty statuses', () => {
+        mockSuiteQLStatusNames([
+            { key: '7', name: 'Negotiation' },
+            { key: '8', name: 'In Discussion' }
+        ]);
+
         const opps = [
             { entitystatus: '6', entitystatusText: 'Proposal' }
         ];
         const columns = queries.buildStatusColumns(['8', '6', '7'], opps);
         expect(columns.map((c) => c.id)).toEqual(['6', '7', '8']);
-        expect(columns.find((c) => c.id === '7').name).toBe('Status 7');
+        expect(columns.find((c) => c.id === '7').name).toBe('Negotiation');
+        expect(columns.find((c) => c.id === '8').name).toBe('In Discussion');
         expect(columns.find((c) => c.id === '6').name).toBe('Proposal');
+    });
+
+    it('uses entitystatus names when the rep has no opportunities in those statuses', () => {
+        mockSuiteQLStatusNames([
+            { key: '9', name: 'Closed Won' },
+            { key: '10', name: 'Closed Lost' }
+        ]);
+
+        const columns = queries.buildStatusColumns(['9', '10'], []);
+
+        expect(columns).toEqual([
+            { id: '9', name: 'Closed Won' },
+            { id: '10', name: 'Closed Lost' }
+        ]);
     });
 
     it('falls back to deriveStatusColumns when param is empty', () => {
