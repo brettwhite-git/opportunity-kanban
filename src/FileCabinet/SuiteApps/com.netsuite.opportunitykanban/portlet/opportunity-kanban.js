@@ -147,37 +147,83 @@ define(['N/runtime', 'N/file', 'N/url', '../lib/queries'], (runtime, file, url, 
     min-width: 0;
 }
 
-.kanban-filter-btn {
-    padding: 4px 12px;
-    border: 1px solid #ccc;
-    border-radius: 3px;
+.kanban-filter-chip {
+    padding: 4px 14px;
+    border: 1px solid rgba(22, 21, 19, 0.2);
+    border-radius: 16px;
     font-size: 12px;
     font-weight: 600;
     background: #fff;
-    color: #555;
+    color: #161513;
     cursor: pointer;
-    transition: all 0.15s ease;
+    transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
     display: inline-flex;
     align-items: center;
     user-select: none;
     -webkit-user-select: none;
     line-height: 1.4;
+    white-space: nowrap;
 }
 
-.kanban-filter-btn:hover {
-    background: #f0f0f0;
-    border-color: #999;
+.kanban-filter-chip:hover {
+    background: #f5f4f2;
+    border-color: rgba(22, 21, 19, 0.35);
 }
 
-.kanban-filter-btn:focus {
+.kanban-filter-chip:focus {
     outline: 2px solid #325c72;
     outline-offset: 1px;
 }
 
-.kanban-filter-btn.active {
+.kanban-filter-chip.active {
     background: #325c72;
     color: #fff;
     border-color: #325c72;
+}
+
+.kanban-date-range {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    margin-left: 4px;
+}
+
+.kanban-date-input {
+    padding: 3px 6px;
+    border: 1px solid rgba(22, 21, 19, 0.2);
+    border-radius: 4px;
+    font-size: 12px;
+    font-family: inherit;
+    color: #161513;
+    max-width: 130px;
+}
+
+.kanban-date-input:focus {
+    outline: 2px solid #325c72;
+    outline-offset: 1px;
+}
+
+.kanban-filter-apply {
+    padding: 4px 10px;
+    border: 1px solid #325c72;
+    border-radius: 16px;
+    font-size: 12px;
+    font-weight: 600;
+    background: #fff;
+    color: #325c72;
+    cursor: pointer;
+    line-height: 1.4;
+    user-select: none;
+    -webkit-user-select: none;
+}
+
+.kanban-filter-apply:hover {
+    background: #f0f4f6;
+}
+
+.kanban-filter-apply:focus {
+    outline: 2px solid #325c72;
+    outline-offset: 1px;
 }
 
 .kanban-columns {
@@ -315,21 +361,22 @@ define(['N/runtime', 'N/file', 'N/url', '../lib/queries'], (runtime, file, url, 
 }
 
 .kanban-kpi-row {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-    gap: 16px;
+    display: flex;
+    align-items: stretch;
     margin: 0 0 16px;
+    font-family: "Oracle Sans", "Helvetica Neue", sans-serif;
 }
 
-.kanban-kpi-card {
-    padding: 16px;
-    height: 84px;
-    border: 1px solid rgba(22, 21, 19, 0.12);
-    border-radius: 6px;
-    background-color: transparent;
-    box-shadow: none;
+.kanban-kpi-item {
+    flex: 1;
+    padding: 8px 16px;
+    border-right: 1px solid #d3d3d3;
     box-sizing: border-box;
-    font-family: "Oracle Sans", "Helvetica Neue", sans-serif;
+    min-width: 0;
+}
+
+.kanban-kpi-item:last-child {
+    border-right: none;
 }
 
 .kanban-kpi-label {

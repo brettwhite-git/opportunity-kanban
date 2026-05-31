@@ -43,6 +43,11 @@
         return '$' + rounded.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ',');
     }
 
+    function formatCount(value) {
+        var n = Math.round(parseFloat(value) || 0);
+        return n.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+    }
+
     function classifyStatus(statusText) {
         if (!statusText) return 'open';
         var t = statusText.toLowerCase();
@@ -63,6 +68,49 @@
 
     function isParamDriven() {
         return !!(data.selectedStatusIds && data.selectedStatusIds.length);
+    }
+
+    /** NetSuite M/D/YYYY → ISO YYYY-MM-DD for range comparisons. */
+    function normalizeCloseDateToIso(dateStr) {
+        if (!dateStr) return '';
+        var parts = String(dateStr).trim().split('/');
+        if (parts.length !== 3) return '';
+        var month = parseInt(parts[0], 10);
+        var day = parseInt(parts[1], 10);
+        var year = parseInt(parts[2], 10);
+        if (!month || !day || !year) return '';
+        var mm = month < 10 ? '0' + month : String(month);
+        var dd = day < 10 ? '0' + day : String(day);
+        return year + '-' + mm + '-' + dd;
+    }
+
+    function filterColumnKpiTail(hideEmptyCols) {
+        var hideEmpty = hideEmptyCols ? 'true' : 'false';
+        return "var hideEmpty=" + hideEmpty + ";" +
+            "var cols=c.querySelectorAll('.kanban-column');" +
+            "for(var k=0;k<cols.length;k++){" +
+            "var n=0;var cc=cols[k].querySelectorAll('.kanban-card');" +
+            "for(var m=0;m<cc.length;m++){if(cc[m].style.display!=='none')n++}" +
+            "var cnt=cols[k].querySelector('.kanban-column-count');if(cnt)cnt.textContent=n;" +
+            "cols[k].style.display=(hideEmpty&&n===0)?'none':''}" +
+            recountVisibleKpis();
+    }
+
+    function setChipActiveState(c, activeFilter) {
+        var btns = c.querySelectorAll('.kanban-filter-chip');
+        for (var j = 0; j < btns.length; j++) {
+            var df = btns[j].getAttribute('data-filter');
+            var on = df === activeFilter;
+            btns[j].className = 'kanban-filter-chip' + (on ? ' active' : '');
+            btns[j].setAttribute('aria-pressed', on ? 'true' : 'false');
+        }
+    }
+
+    function clearDateRangeInputs() {
+        var ds = document.getElementById('kanban-date-start');
+        var de = document.getElementById('kanban-date-end');
+        if (ds) ds.value = '';
+        if (de) de.value = '';
     }
 
     function makeDragStartOnclick() {
@@ -99,17 +147,21 @@
 
     function recountVisibleKpis() {
         return "var kcards=c.querySelectorAll('.kanban-card');" +
-            "var sums={open:0,won:0,lost:0};" +
+            "var sums={open:0,won:0,lost:0};var oppCount=0;" +
             "for(var i2=0;i2<kcards.length;i2++){" +
             "if(kcards[i2].style.display!=='none'){" +
+            "oppCount++;" +
             "var st=kcards[i2].getAttribute('data-status-type')||'open';" +
             "var am=parseFloat(kcards[i2].getAttribute('data-amount'))||0;" +
             "if(sums.hasOwnProperty(st))sums[st]+=am}}" +
             "var fmt=function(v){var r=Math.round(v);" +
             "return'$'+r.toString().replace(/\\B(?=(\\d{3})+(?!\\d))/g,',')};" +
+            "var fmtN=function(v){return String(Math.round(v)).replace(/\\B(?=(\\d{3})+(?!\\d))/g,',')};" +
+            "var ce=document.getElementById('kpi-count');" +
             "var oe=document.getElementById('kpi-open');" +
             "var we=document.getElementById('kpi-won');" +
             "var le=document.getElementById('kpi-lost');" +
+            "if(ce)ce.textContent=fmtN(oppCount);" +
             "if(oe)oe.textContent=fmt(sums.open);" +
             "if(we)we.textContent=fmt(sums.won);" +
             "if(le)le.textContent=fmt(sums.lost);";
@@ -224,23 +276,57 @@
     // a self-contained onclick string that uses only built-in DOM APIs.
 
     function makeFilterOnclick(filterValue, hideEmptyCols) {
-        var hideEmpty = hideEmptyCols ? "true" : "false";
-        return "var hideEmpty=" + hideEmpty + ";var f='" + filterValue + "';" +
+        return "var hideEmpty=" + (hideEmptyCols ? 'true' : 'false') + ";var f='" + filterValue + "';" +
             "var c=document.getElementById('kanban-board-container');" +
+            "var ds=document.getElementById('kanban-date-start');var de=document.getElementById('kanban-date-end');" +
+            "if(ds)ds.value='';if(de)de.value='';" +
             "var cards=c.querySelectorAll('.kanban-card');" +
             "for(var i=0;i<cards.length;i++){" +
             "cards[i].style.display=(cards[i].getAttribute('data-cg').indexOf(f)>=0)?'':'none'}" +
-            "var btns=c.querySelectorAll('.kanban-filter-btn');" +
+            "var btns=c.querySelectorAll('.kanban-filter-chip');" +
             "for(var j=0;j<btns.length;j++){" +
-            "btns[j].className='kanban-filter-btn'+(btns[j].getAttribute('data-filter')===f?' active':'');" +
-            "btns[j].setAttribute('aria-pressed',btns[j].getAttribute('data-filter')===f?'true':'false')}" +
-            "var cols=c.querySelectorAll('.kanban-column');" +
-            "for(var k=0;k<cols.length;k++){" +
-            "var n=0;var cc=cols[k].querySelectorAll('.kanban-card');" +
-            "for(var m=0;m<cc.length;m++){if(cc[m].style.display!=='none')n++}" +
-            "cols[k].querySelector('.kanban-column-count').textContent=n;" +
-            "cols[k].style.display=(hideEmpty&&n===0)?'none':''}" +
-            recountVisibleKpis();
+            "var df=btns[j].getAttribute('data-filter');var on=df===f;" +
+            "btns[j].className='kanban-filter-chip'+(on?' active':'');" +
+            "btns[j].setAttribute('aria-pressed',on?'true':'false');}" +
+            filterColumnKpiTail(hideEmptyCols);
+    }
+
+    function makeRangeApplyOnclick(hideEmptyCols) {
+        return "var c=document.getElementById('kanban-board-container');" +
+            "var startEl=document.getElementById('kanban-date-start');" +
+            "var endEl=document.getElementById('kanban-date-end');" +
+            "if(!startEl||!endEl)return;" +
+            "var start=startEl.value;var end=endEl.value;" +
+            "if(!start||!end)return;" +
+            "var hideEmpty=" + (hideEmptyCols ? 'true' : 'false') + ";" +
+            "var cards=c.querySelectorAll('.kanban-card');" +
+            "for(var i=0;i<cards.length;i++){" +
+            "var d=cards[i].getAttribute('data-close-date')||'';" +
+            "var show=!!(d&&start<=d&&d<=end);" +
+            "if(start>end)show=false;" +
+            "cards[i].style.display=show?'':'none';}" +
+            "var btns=c.querySelectorAll('.kanban-filter-chip');" +
+            "for(var j=0;j<btns.length;j++){" +
+            "var df=btns[j].getAttribute('data-filter');var on=df==='CUSTOM_RANGE';" +
+            "btns[j].className='kanban-filter-chip'+(on?' active':'');" +
+            "btns[j].setAttribute('aria-pressed',on?'true':'false');}" +
+            filterColumnKpiTail(hideEmptyCols);
+    }
+
+    function applyColumnVisibility(hideEmptyCols) {
+        var c = document.getElementById('kanban-board-container');
+        if (!c) return;
+        var cols = c.querySelectorAll('.kanban-column');
+        for (var k = 0; k < cols.length; k++) {
+            var n = 0;
+            var cc = cols[k].querySelectorAll('.kanban-card');
+            for (var m = 0; m < cc.length; m++) {
+                if (cc[m].style.display !== 'none') n++;
+            }
+            var cnt = cols[k].querySelector('.kanban-column-count');
+            if (cnt) cnt.textContent = n;
+            cols[k].style.display = (hideEmptyCols && n === 0) ? 'none' : '';
+        }
     }
 
     // Equivalent JS function for jsdom test compatibility
@@ -249,25 +335,36 @@
         var hideEmptyCols = !isParamDriven();
         var c = document.getElementById('kanban-board-container');
         if (!c) return;
+        clearDateRangeInputs();
         var cards = c.querySelectorAll('.kanban-card');
         for (var i = 0; i < cards.length; i++) {
             cards[i].style.display = (cards[i].getAttribute('data-cg').indexOf(filterValue) >= 0) ? '' : 'none';
         }
-        var btns = c.querySelectorAll('.kanban-filter-btn');
-        for (var j = 0; j < btns.length; j++) {
-            btns[j].className = 'kanban-filter-btn' + (btns[j].getAttribute('data-filter') === filterValue ? ' active' : '');
-            btns[j].setAttribute('aria-pressed', btns[j].getAttribute('data-filter') === filterValue ? 'true' : 'false');
+        setChipActiveState(c, filterValue);
+        applyColumnVisibility(hideEmptyCols);
+        updateKpis();
+    }
+
+    function applyRangeFilter(start, end) {
+        var hideEmptyCols = !isParamDriven();
+        var c = document.getElementById('kanban-board-container');
+        if (!c) return;
+        var startEl = document.getElementById('kanban-date-start');
+        var endEl = document.getElementById('kanban-date-end');
+        if (startEl && start) startEl.value = start;
+        if (endEl && end) endEl.value = end;
+        var startVal = startEl ? startEl.value : '';
+        var endVal = endEl ? endEl.value : '';
+        if (!startVal || !endVal) return;
+        var cards = c.querySelectorAll('.kanban-card');
+        var invalidRange = startVal > endVal;
+        for (var i = 0; i < cards.length; i++) {
+            var d = cards[i].getAttribute('data-close-date') || '';
+            var show = !invalidRange && d && startVal <= d && d <= endVal;
+            cards[i].style.display = show ? '' : 'none';
         }
-        var cols = c.querySelectorAll('.kanban-column');
-        for (var k = 0; k < cols.length; k++) {
-            var n = 0;
-            var cc = cols[k].querySelectorAll('.kanban-card');
-            for (var m = 0; m < cc.length; m++) {
-                if (cc[m].style.display !== 'none') n++;
-            }
-            cols[k].querySelector('.kanban-column-count').textContent = n;
-            cols[k].style.display = (hideEmptyCols && n === 0) ? 'none' : '';
-        }
+        setChipActiveState(c, 'CUSTOM_RANGE');
+        applyColumnVisibility(hideEmptyCols);
         updateKpis();
     }
 
@@ -281,6 +378,7 @@
         card.className = 'kanban-card';
         card.setAttribute('data-opp-id', opp.id);
         card.setAttribute('data-cg', opp.closeDateGroup || '');
+        card.setAttribute('data-close-date', normalizeCloseDateToIso(opp.expectedclosedate));
         card.setAttribute('data-amount', opp.projectedtotal || '0');
         card.setAttribute('data-status-type', classifyStatus(opp.entitystatusText));
 
@@ -364,14 +462,15 @@
         row.className = 'kanban-kpi-row';
 
         var kpis = [
-            { id: 'kpi-open', label: 'Open Value' },
-            { id: 'kpi-won', label: 'Closed Won' },
-            { id: 'kpi-lost', label: 'Lost' }
+            { id: 'kpi-count', label: 'Opportunities', initial: '0' },
+            { id: 'kpi-open', label: 'Open Value', initial: '$0' },
+            { id: 'kpi-won', label: 'Closed Won', initial: '$0' },
+            { id: 'kpi-lost', label: 'Lost', initial: '$0' }
         ];
 
         kpis.forEach(function (kpi) {
             var card = document.createElement('div');
-            card.className = 'kanban-kpi-card';
+            card.className = 'kanban-kpi-item';
 
             var label = document.createElement('div');
             label.className = 'kanban-kpi-label';
@@ -380,7 +479,7 @@
             var value = document.createElement('div');
             value.className = 'kanban-kpi-value';
             value.id = kpi.id;
-            value.textContent = '$0';
+            value.textContent = kpi.initial;
 
             card.appendChild(label);
             card.appendChild(value);
@@ -395,15 +494,19 @@
         if (!c) return;
         var cards = c.querySelectorAll('.kanban-card');
         var sums = { open: 0, won: 0, lost: 0 };
+        var oppCount = 0;
         for (var i = 0; i < cards.length; i++) {
             if (cards[i].style.display === 'none') continue;
+            oppCount++;
             var type = cards[i].getAttribute('data-status-type') || 'open';
             var amt = parseFloat(cards[i].getAttribute('data-amount')) || 0;
             if (sums.hasOwnProperty(type)) sums[type] += amt;
         }
+        var countEl = document.getElementById('kpi-count');
         var openEl = document.getElementById('kpi-open');
         var wonEl = document.getElementById('kpi-won');
         var lostEl = document.getElementById('kpi-lost');
+        if (countEl) countEl.textContent = formatCount(oppCount);
         if (openEl) openEl.textContent = formatFullCurrency(sums.open);
         if (wonEl) wonEl.textContent = formatFullCurrency(sums.won);
         if (lostEl) lostEl.textContent = formatFullCurrency(sums.lost);
@@ -457,7 +560,7 @@
         ];
         filterButtons.forEach(function (opt) {
             var btn = document.createElement('div');
-            btn.className = 'kanban-filter-btn' + (opt.value === 'THIS_MONTH' ? ' active' : '');
+            btn.className = 'kanban-filter-chip' + (opt.value === 'THIS_MONTH' ? ' active' : '');
             btn.setAttribute('role', 'button');
             btn.setAttribute('tabindex', '0');
             btn.setAttribute('aria-pressed', opt.value === 'THIS_MONTH' ? 'true' : 'false');
@@ -467,6 +570,48 @@
             btn.onclick = function () { applyFilter(opt.value); };
             filtersWrap.appendChild(btn);
         });
+
+        var rangeChip = document.createElement('div');
+        rangeChip.className = 'kanban-filter-chip';
+        rangeChip.setAttribute('role', 'button');
+        rangeChip.setAttribute('tabindex', '0');
+        rangeChip.setAttribute('aria-pressed', 'false');
+        rangeChip.setAttribute('data-filter', 'CUSTOM_RANGE');
+        rangeChip.textContent = 'Range';
+        filtersWrap.appendChild(rangeChip);
+
+        var dateRangeWrap = document.createElement('div');
+        dateRangeWrap.className = 'kanban-date-range';
+
+        var dateStart = document.createElement('input');
+        dateStart.type = 'date';
+        dateStart.id = 'kanban-date-start';
+        dateStart.className = 'kanban-date-input';
+        dateStart.setAttribute('aria-label', 'Close date from');
+
+        var dateEnd = document.createElement('input');
+        dateEnd.type = 'date';
+        dateEnd.id = 'kanban-date-end';
+        dateEnd.className = 'kanban-date-input';
+        dateEnd.setAttribute('aria-label', 'Close date to');
+
+        var applyBtn = document.createElement('div');
+        applyBtn.className = 'kanban-filter-apply';
+        applyBtn.setAttribute('role', 'button');
+        applyBtn.setAttribute('tabindex', '0');
+        applyBtn.textContent = 'Apply';
+        applyBtn.setAttribute('onclick', makeRangeApplyOnclick(hideEmptyCols));
+        applyBtn.onclick = function () {
+            applyRangeFilter(
+                document.getElementById('kanban-date-start').value,
+                document.getElementById('kanban-date-end').value
+            );
+        };
+
+        dateRangeWrap.appendChild(dateStart);
+        dateRangeWrap.appendChild(dateEnd);
+        dateRangeWrap.appendChild(applyBtn);
+        filtersWrap.appendChild(dateRangeWrap);
 
         toolbar.appendChild(filtersWrap);
         toolbar.appendChild(createExpandButton());

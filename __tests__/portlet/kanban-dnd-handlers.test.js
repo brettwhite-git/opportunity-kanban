@@ -133,9 +133,15 @@ describe('kanban DnD inline handler strings', () => {
             assertQuoteSafeHandler(body.getAttribute('ondragleave'), 'ondragleave');
         });
 
-        document.querySelectorAll('.kanban-filter-btn').forEach((btn) => {
-            assertQuoteSafeHandler(btn.getAttribute('onclick'), 'filter onclick');
+        document.querySelectorAll('.kanban-filter-chip').forEach((btn) => {
+            var onclick = btn.getAttribute('onclick');
+            if (!onclick) return;
+            assertQuoteSafeHandler(onclick, 'filter onclick');
         });
+        assertQuoteSafeHandler(
+            document.querySelector('.kanban-filter-apply').getAttribute('onclick'),
+            'range apply onclick'
+        );
     });
 
     it('ondrop finds cards by numeric internal id at runtime', () => {

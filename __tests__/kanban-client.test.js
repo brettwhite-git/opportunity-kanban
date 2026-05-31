@@ -178,42 +178,96 @@ describe('card display', () => {
 });
 
 describe('date filter', () => {
-    it('renders Quick Filter buttons as divs with role="button"', () => {
+    it('renders filter chips and date range controls', () => {
         window.KANBAN_DATA = makeSampleData();
         loadClient();
 
-        const buttons = document.querySelectorAll('.kanban-filter-btn');
-        expect(buttons.length).toBe(4);
-        expect(buttons[0].textContent).toBe('This Month');
-        expect(buttons[1].textContent).toBe('This Quarter');
-        expect(buttons[2].textContent).toBe('Next Quarter');
-        expect(buttons[3].textContent).toBe('Last Quarter');
-        expect(buttons[0].tagName).toBe('DIV');
-        expect(buttons[0].getAttribute('role')).toBe('button');
-        expect(buttons[0].getAttribute('tabindex')).toBe('0');
-        expect(buttons[0].classList.contains('active')).toBe(true);
+        const chips = document.querySelectorAll('.kanban-filter-chip');
+        expect(chips.length).toBe(5);
+        expect(chips[0].textContent).toBe('This Month');
+        expect(chips[1].textContent).toBe('This Quarter');
+        expect(chips[2].textContent).toBe('Next Quarter');
+        expect(chips[3].textContent).toBe('Last Quarter');
+        expect(chips[4].textContent).toBe('Range');
+        expect(chips[0].tagName).toBe('DIV');
+        expect(chips[0].getAttribute('role')).toBe('button');
+        expect(chips[0].getAttribute('tabindex')).toBe('0');
+        expect(chips[0].classList.contains('active')).toBe(true);
+        expect(document.getElementById('kanban-date-start')).toBeTruthy();
+        expect(document.getElementById('kanban-date-end')).toBeTruthy();
+        expect(document.querySelector('.kanban-filter-apply').textContent).toBe('Apply');
     });
 
     it('has self-contained onclick attribute (no function references)', () => {
         window.KANBAN_DATA = makeSampleData();
         loadClient();
 
-        const btn = document.querySelector('.kanban-filter-btn[data-filter="THIS_MONTH"]');
+        const btn = document.querySelector('.kanban-filter-chip[data-filter="THIS_MONTH"]');
         const onclick = btn.getAttribute('onclick');
         expect(onclick).toContain("var f='THIS_MONTH'");
         expect(onclick).toContain('querySelectorAll');
         expect(onclick).toContain('data-cg');
         expect(onclick).toContain('indexOf');
+        expect(onclick).toContain('kanban-date-start');
         // Must NOT reference any custom function
         expect(onclick).not.toContain('_kanbanFilter');
         expect(onclick).not.toContain('_kanbanCardClick');
+    });
+
+    it('sets data-close-date on cards for range filtering', () => {
+        window.KANBAN_DATA = makeSampleData();
+        loadClient();
+
+        const card = document.querySelector('.kanban-card[data-opp-id="100"]');
+        expect(card.getAttribute('data-close-date')).toBe('2026-03-15');
+    });
+
+    it('filters by custom close date range via Apply', () => {
+        window.KANBAN_DATA = makeSampleData();
+        loadClient();
+
+        document.getElementById('kanban-date-start').value = '2026-03-01';
+        document.getElementById('kanban-date-end').value = '2026-03-31';
+        document.querySelector('.kanban-filter-apply').click();
+
+        const cards = document.querySelectorAll('.kanban-card');
+        expect(cards[0].style.display).toBe('');
+        expect(cards[1].style.display).toBe('none');
+        expect(cards[2].style.display).toBe('');
+        expect(cards[3].style.display).toBe('');
+        expect(document.getElementById('kpi-count').textContent).toBe('3');
+        expect(document.querySelector('.kanban-filter-chip.active').getAttribute('data-filter')).toBe('CUSTOM_RANGE');
+    });
+
+    it('preset filter clears range chip active state', () => {
+        window.KANBAN_DATA = makeSampleData();
+        loadClient();
+
+        document.getElementById('kanban-date-start').value = '2026-06-01';
+        document.getElementById('kanban-date-end').value = '2026-06-30';
+        document.querySelector('.kanban-filter-apply').click();
+        expect(document.querySelector('.kanban-filter-chip[data-filter="CUSTOM_RANGE"]').classList.contains('active')).toBe(true);
+
+        document.querySelector('.kanban-filter-chip[data-filter="THIS_MONTH"]').click();
+        expect(document.querySelector('.kanban-filter-chip[data-filter="CUSTOM_RANGE"]').classList.contains('active')).toBe(false);
+        expect(document.getElementById('kanban-date-start').value).toBe('');
+    });
+
+    it('range Apply onclick is self-contained', () => {
+        window.KANBAN_DATA = makeSampleData();
+        loadClient();
+
+        const onclick = document.querySelector('.kanban-filter-apply').getAttribute('onclick');
+        expect(onclick).toContain('data-close-date');
+        expect(onclick).toContain('CUSTOM_RANGE');
+        expect(onclick).toContain('kpi-count');
     });
 
     it('sets aria-pressed on active filter button', () => {
         window.KANBAN_DATA = makeSampleData();
         loadClient();
 
-        const buttons = document.querySelectorAll('.kanban-filter-btn');
+        const buttons = document.querySelectorAll('.kanban-filter-chip');
         // This Month is default active
         expect(buttons[0].getAttribute('aria-pressed')).toBe('true');
         expect(buttons[1].getAttribute('aria-pressed')).toBe('false');
@@ -244,7 +298,7 @@ describe('date filter', () => {
         expect(cards[1].style.display).toBe('none');
 
         // Switch to THIS_QUARTER — both visible (inclusive)
-        document.querySelector('.kanban-filter-btn[data-filter="THIS_QUARTER"]').click();
+        document.querySelector('.kanban-filter-chip[data-filter="THIS_QUARTER"]').click();
         expect(cards[0].style.display).toBe('');
         expect(cards[1].style.display).toBe('');
     });
@@ -268,11 +322,11 @@ describe('date filter', () => {
         expect(card.style.display).toBe('');
 
         // Visible under THIS_QUARTER too
-        document.querySelector('.kanban-filter-btn[data-filter="THIS_QUARTER"]').click();
+        document.querySelector('.kanban-filter-chip[data-filter="THIS_QUARTER"]').click();
         expect(card.style.display).toBe('');
 
         // Hidden under NEXT_QUARTER
-        document.querySelector('.kanban-filter-btn[data-filter="NEXT_QUARTER"]').click();
+        document.querySelector('.kanban-filter-chip[data-filter="NEXT_QUARTER"]').click();
         expect(card.style.display).toBe('none');
     });
 
@@ -299,7 +353,7 @@ describe('date filter', () => {
         expect(document.querySelector('.kanban-column-count').textContent).toBe('1');
 
         // Switch to THIS_QUARTER: 2 cards visible
-        document.querySelector('.kanban-filter-btn[data-filter="THIS_QUARTER"]').click();
+        document.querySelector('.kanban-filter-chip[data-filter="THIS_QUARTER"]').click();
         expect(document.querySelector('.kanban-column-count').textContent).toBe('2');
     });
 
@@ -310,7 +364,7 @@ describe('date filter', () => {
         });
         loadClient();
 
-        const btn = document.querySelector('.kanban-filter-btn[data-filter="THIS_QUARTER"]');
+        const btn = document.querySelector('.kanban-filter-chip[data-filter="THIS_QUARTER"]');
         const onclick = btn.getAttribute('onclick');
         expect(onclick).toContain("cols[k].style.display=(hideEmpty&&n===0)?'none':''");
 
@@ -328,12 +382,12 @@ describe('date filter', () => {
         loadClient();
 
         // Default: This Month is active
-        var activeBtn = document.querySelector('.kanban-filter-btn.active');
+        var activeBtn = document.querySelector('.kanban-filter-chip.active');
         expect(activeBtn.getAttribute('data-filter')).toBe('THIS_MONTH');
 
         // Switch to Next Quarter
-        document.querySelector('.kanban-filter-btn[data-filter="NEXT_QUARTER"]').click();
-        activeBtn = document.querySelector('.kanban-filter-btn.active');
+        document.querySelector('.kanban-filter-chip[data-filter="NEXT_QUARTER"]').click();
+        activeBtn = document.querySelector('.kanban-filter-chip.active');
         expect(activeBtn.getAttribute('data-filter')).toBe('NEXT_QUARTER');
         expect(activeBtn.getAttribute('aria-pressed')).toBe('true');
     });
@@ -384,13 +438,15 @@ describe('click-through', () => {
 });
 
 describe('KPI cards', () => {
-    it('renders KPI row with 3 cards', () => {
+    it('renders KPI row with 4 metrics', () => {
         window.KANBAN_DATA = makeSampleData();
         loadClient();
 
         const kpiRow = document.querySelector('.kanban-kpi-row');
         expect(kpiRow).toBeTruthy();
-        expect(kpiRow.querySelectorAll('.kanban-kpi-card').length).toBe(3);
+        expect(kpiRow.querySelectorAll('.kanban-kpi-item').length).toBe(4);
+        expect(kpiRow.querySelector('.kanban-kpi-item .kanban-kpi-label').textContent).toBe('Opportunities');
+        expect(document.getElementById('kpi-count')).toBeTruthy();
     });
 
     it('KPI row appears above the filter toolbar', () => {
@@ -409,6 +465,7 @@ describe('KPI cards', () => {
         loadClient();
 
         // THIS_MONTH visible: OPP-001 (Proposal, $150,000), OPP-003 (Closed Won, $75,000), OPP-004 (Closed Lost, $30,000)
+        expect(document.getElementById('kpi-count').textContent).toBe('3');
         expect(document.getElementById('kpi-open').textContent).toBe('$150,000');
         expect(document.getElementById('kpi-won').textContent).toBe('$75,000');
         expect(document.getElementById('kpi-lost').textContent).toBe('$30,000');
@@ -419,7 +476,8 @@ describe('KPI cards', () => {
         loadClient();
 
         // Switch to NEXT_QUARTER — only OPP-002 (Negotiation, $2,500,000, open)
-        document.querySelector('.kanban-filter-btn[data-filter="NEXT_QUARTER"]').click();
+        document.querySelector('.kanban-filter-chip[data-filter="NEXT_QUARTER"]').click();
+        expect(document.getElementById('kpi-count').textContent).toBe('1');
         expect(document.getElementById('kpi-open').textContent).toBe('$2,500,000');
         expect(document.getElementById('kpi-won').textContent).toBe('$0');
         expect(document.getElementById('kpi-lost').textContent).toBe('$0');
@@ -476,9 +534,10 @@ describe('KPI cards', () => {
         window.KANBAN_DATA = makeSampleData();
         loadClient();
 
-        const btn = document.querySelector('.kanban-filter-btn[data-filter="THIS_MONTH"]');
+        const btn = document.querySelector('.kanban-filter-chip[data-filter="THIS_MONTH"]');
         const onclick = btn.getAttribute('onclick');
         expect(onclick).toContain('data-status-type');
+        expect(onclick).toContain('kpi-count');
         expect(onclick).toContain('kpi-open');
         expect(onclick).toContain('kpi-won');
         expect(onclick).toContain('kpi-lost');
@@ -601,6 +660,7 @@ describe('drag and drop attribute strings', () => {
         loadClient();
 
         const ondrop = document.querySelector('.kanban-column[data-status="8"] .kanban-column-body').getAttribute('ondrop');
+        expect(ondrop).toContain('kpi-count');
         expect(ondrop).toContain('kpi-open');
         expect(ondrop).toContain('data-status-type');
         expect(ondrop).not.toMatch(/"/);
@@ -614,6 +674,7 @@ describe('drag and drop attribute strings', () => {
         });
         loadClient();
 
+        expect(document.getElementById('kpi-count').textContent).toBe('3');
         expect(document.getElementById('kpi-open').textContent).toBe('$150,000');
         expect(document.getElementById('kpi-won').textContent).toBe('$75,000');
         expect(document.getElementById('kpi-lost').textContent).toBe('$30,000');
@@ -633,6 +694,7 @@ describe('drag and drop attribute strings', () => {
         await global.fetch.mock.results[0].value.then(function (r) { return r.json(); });
         await new Promise(function (resolve) { setTimeout(resolve, 0); });
 
+        expect(document.getElementById('kpi-count').textContent).toBe('3');
         expect(document.getElementById('kpi-open').textContent).toBe('$0');
         expect(document.getElementById('kpi-won').textContent).toBe('$225,000');
         expect(document.getElementById('kpi-lost').textContent).toBe('$30,000');
