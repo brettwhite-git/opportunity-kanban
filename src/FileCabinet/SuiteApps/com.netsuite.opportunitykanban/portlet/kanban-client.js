@@ -97,6 +97,24 @@
             "var cnt=cols[k].querySelector('.kanban-column-count');if(cnt)cnt.textContent=n}";
     }
 
+    function recountVisibleKpis() {
+        return "var kcards=c.querySelectorAll('.kanban-card');" +
+            "var sums={open:0,won:0,lost:0};" +
+            "for(var i2=0;i2<kcards.length;i2++){" +
+            "if(kcards[i2].style.display!=='none'){" +
+            "var st=kcards[i2].getAttribute('data-status-type')||'open';" +
+            "var am=parseFloat(kcards[i2].getAttribute('data-amount'))||0;" +
+            "if(sums.hasOwnProperty(st))sums[st]+=am}}" +
+            "var fmt=function(v){var r=Math.round(v);" +
+            "return'$'+r.toString().replace(/\\B(?=(\\d{3})+(?!\\d))/g,',')};" +
+            "var oe=document.getElementById('kpi-open');" +
+            "var we=document.getElementById('kpi-won');" +
+            "var le=document.getElementById('kpi-lost');" +
+            "if(oe)oe.textContent=fmt(sums.open);" +
+            "if(we)we.textContent=fmt(sums.won);" +
+            "if(le)le.textContent=fmt(sums.lost);";
+    }
+
     function makeExpandOnclick() {
         return "var c=document.getElementById('kanban-board-container');if(!c)return;" +
             "var bd=document.getElementById('kanban-board-backdrop');" +
@@ -189,6 +207,7 @@
             "if(lt.indexOf('closed won')>=0||lt.indexOf('closed - won')>=0)tp='won';" +
             "else if(lt.indexOf('closed lost')>=0||lt.indexOf('closed - lost')>=0)tp='lost';" +
             "card.setAttribute('data-status-type',tp);" +
+            recountVisibleKpis() +
             "}else{srcBody.appendChild(card);dropBody.removeChild(card);alert('Save failed: '+(d&&d.error?d.error:'unknown'));" +
             recountVisibleColumnCounts() +
             "}}).catch(function(err){srcBody.appendChild(card);dropBody.removeChild(card);card.removeAttribute('data-saving');card.style.pointerEvents='';" +
@@ -221,20 +240,7 @@
             "for(var m=0;m<cc.length;m++){if(cc[m].style.display!=='none')n++}" +
             "cols[k].querySelector('.kanban-column-count').textContent=n;" +
             "cols[k].style.display=(hideEmpty&&n===0)?'none':''}" +
-            "var sums={open:0,won:0,lost:0};" +
-            "for(var i2=0;i2<cards.length;i2++){" +
-            "if(cards[i2].style.display!=='none'){" +
-            "var st=cards[i2].getAttribute('data-status-type')||'open';" +
-            "var am=parseFloat(cards[i2].getAttribute('data-amount'))||0;" +
-            "if(sums.hasOwnProperty(st))sums[st]+=am}}" +
-            "var fmt=function(v){var r=Math.round(v);" +
-            "return'$'+r.toString().replace(/\\B(?=(\\d{3})+(?!\\d))/g,',')};" +
-            "var oe=document.getElementById('kpi-open');" +
-            "var we=document.getElementById('kpi-won');" +
-            "var le=document.getElementById('kpi-lost');" +
-            "if(oe)oe.textContent=fmt(sums.open);" +
-            "if(we)we.textContent=fmt(sums.won);" +
-            "if(le)le.textContent=fmt(sums.lost);";
+            recountVisibleKpis();
     }
 
     // Equivalent JS function for jsdom test compatibility

@@ -592,6 +592,70 @@ describe('drag and drop attribute strings', () => {
         delete global.fetch;
     });
 
+    it('ondrop string includes KPI recalculation', () => {
+        window.KANBAN_DATA = makeSampleData({
+            updateUrl: '/app/site/hosting/scriptlet.nl?script=99&deploy=1',
+            allowedStatusIds: ['6', '7', '8', '9'],
+            selectedStatusIds: ['6', '7', '8', '9']
+        });
+        loadClient();
+
+        const ondrop = document.querySelector('.kanban-column[data-status="8"] .kanban-column-body').getAttribute('ondrop');
+        expect(ondrop).toContain('kpi-open');
+        expect(ondrop).toContain('data-status-type');
+        expect(ondrop).not.toMatch(/"/);
+    });
+
+    it('updates KPI totals after successful drop save', async () => {
+        window.KANBAN_DATA = makeSampleData({
+            updateUrl: '/app/site/hosting/scriptlet.nl?script=99&deploy=1',
+            allowedStatusIds: ['6', '7', '8', '9'],
+            selectedStatusIds: ['6', '7', '8', '9']
+        });
+        loadClient();
+
+        expect(document.getElementById('kpi-open').textContent).toBe('$150,000');
+        expect(document.getElementById('kpi-won').textContent).toBe('$75,000');
+        expect(document.getElementById('kpi-lost').textContent).toBe('$30,000');
+
+        global.fetch = jest.fn().mockResolvedValue({
+            json: () => Promise.resolve({ ok: true, entitystatusText: 'Closed Won' })
+        });
+
+        const targetBody = document.querySelector('.kanban-column[data-status="8"] .kanban-column-body');
+        const ondrop = targetBody.getAttribute('ondrop');
+        new Function('event', ondrop).call(targetBody, {
+            preventDefault() {},
+            stopPropagation() {},
+            dataTransfer: { getData: () => '100' }
+        });
+
+        await global.fetch.mock.results[0].value.then(function (r) { return r.json(); });
+        await new Promise(function (resolve) { setTimeout(resolve, 0); });
+
+        expect(document.getElementById('kpi-open').textContent).toBe('$0');
+        expect(document.getElementById('kpi-won').textContent).toBe('$225,000');
+        expect(document.getElementById('kpi-lost').textContent).toBe('$30,000');
+
+        delete global.fetch;
+    });
+
+    it('ondrop recalculates KPIs only once on successful save path', () => {
+        window.KANBAN_DATA = makeSampleData({
+            updateUrl: '/app/site/hosting/scriptlet.nl?script=99&deploy=1',
+            allowedStatusIds: ['6', '7', '8', '9'],
+            selectedStatusIds: ['6', '7', '8', '9']
+        });
+        loadClient();
+
+        const ondrop = document.querySelector('.kanban-column[data-status="8"] .kanban-column-body').getAttribute('ondrop');
+        const statusTypeIdx = ondrop.indexOf("card.setAttribute('data-status-type',tp);");
+        const kpiIdx = ondrop.indexOf('kpi-open');
+        expect(statusTypeIdx).toBeGreaterThan(-1);
+        expect(kpiIdx).toBeGreaterThan(statusTypeIdx);
+        expect((ondrop.match(/kpi-open/g) || []).length).toBe(1);
+    });
+
     it('renders empty param-driven columns', () => {
         window.KANBAN_DATA = makeSampleData({
             columns: [
