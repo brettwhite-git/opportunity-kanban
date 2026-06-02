@@ -716,7 +716,7 @@ describe('drag and drop attribute strings', () => {
         delete global.fetch;
     });
 
-    it('updates card probability badge after successful drop save', async () => {
+    it('updates card status attributes after drop without changing probability display', async () => {
         window.KANBAN_DATA = makeSampleData({
             updateUrl: '/app/site/hosting/scriptlet.nl?script=99&deploy=1',
             allowedStatusIds: ['6', '7'],
@@ -725,11 +725,12 @@ describe('drag and drop attribute strings', () => {
         loadClient();
 
         const card = document.querySelector('.kanban-card[data-opp-id="100"]');
+        expect(card.getAttribute('data-entitystatus')).toBe('6');
         const probEl = card.querySelector('.kanban-card-probability');
         expect(probEl.textContent).toBe('50%');
 
         global.fetch = jest.fn().mockResolvedValue({
-            json: () => Promise.resolve({ ok: true, entitystatusText: 'Negotiation', probability: '75' })
+            json: () => Promise.resolve({ ok: true, entitystatusText: 'Negotiation' })
         });
 
         const targetBody = document.querySelector('.kanban-column[data-status="7"] .kanban-column-body');
@@ -743,7 +744,9 @@ describe('drag and drop attribute strings', () => {
         await global.fetch.mock.results[0].value.then(function (r) { return r.json(); });
         await new Promise(function (resolve) { setTimeout(resolve, 0); });
 
-        expect(probEl.textContent).toBe('75%');
+        expect(card.getAttribute('data-entitystatus')).toBe('7');
+        expect(card.getAttribute('data-status-type')).toBe('open');
+        expect(probEl.textContent).toBe('50%');
 
         delete global.fetch;
     });
