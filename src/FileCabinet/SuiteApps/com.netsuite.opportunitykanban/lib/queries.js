@@ -234,7 +234,7 @@ define(['N/search', 'N/query'], (search, query) => {
                 companyname: result.getText({ name: 'entity' }),
                 entitystatus: result.getValue({ name: 'entitystatus' }),
                 entitystatusText: result.getText({ name: 'entitystatus' }),
-                probability: result.getValue({ name: 'probability' }),
+                probability: result.getText({ name: 'probability' }) || '',
                 expectedclosedate: result.getValue({ name: 'expectedclosedate' }),
                 closeDateGroup: result.getValue({ name: 'formulatext' }) || 'OTHER',
                 projectedtotal: result.getValue({ name: 'projectedtotal' }),

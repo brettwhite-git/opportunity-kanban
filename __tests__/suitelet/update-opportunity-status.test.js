@@ -85,11 +85,12 @@ describe('update-opportunity-status suitelet', () => {
         record.load
             .mockReturnValueOnce(mockOpp)
             .mockReturnValueOnce({
-                getValue: jest.fn((opts) => {
-                    if (opts.fieldId === 'probability') return '100';
+                getValue: jest.fn(() => ''),
+                getText: jest.fn((opts) => {
+                    if (opts.fieldId === 'entitystatus') return 'Closed Won';
+                    if (opts.fieldId === 'probability') return '100.0%';
                     return '';
-                }),
-                getText: jest.fn(() => 'Closed Won')
+                })
             });
 
         const response = mockResponse();
@@ -105,7 +106,11 @@ describe('update-opportunity-status suitelet', () => {
         const payload = JSON.parse(response.getBody());
         expect(payload.ok).toBe(true);
         expect(payload.entitystatusText).toBe('Closed Won');
-        expect(payload.probability).toBe('100');
-        expect(record.submitFields).toHaveBeenCalled();
+        expect(payload.probability).toBe('100.0%');
+        expect(record.submitFields).toHaveBeenCalledWith(
+            expect.objectContaining({
+                options: expect.objectContaining({ enableSourcing: true })
+            })
+        );
     });
 });

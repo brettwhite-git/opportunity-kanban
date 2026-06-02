@@ -212,7 +212,7 @@ describe('getOpportunitiesByUser', () => {
                     projectedtotal: '150000.00',
                     title: 'Big Deal'
                 },
-                { entity: 'Acme Corp', entitystatus: 'Proposal' }
+                { entity: 'Acme Corp', entitystatus: 'Proposal', probability: '50.0%' }
             )
         ];
         mockSearchRun(results);
@@ -232,7 +232,7 @@ describe('getOpportunitiesByUser', () => {
             companyname: 'Acme Corp',
             entitystatus: '6',
             entitystatusText: 'Proposal',
-            probability: '50',
+            probability: '50.0%',
             expectedclosedate: '3/15/2026',
             closeDateGroup: 'THIS_MONTH THIS_QUARTER',
             projectedtotal: '150000.00',
@@ -248,8 +248,8 @@ describe('getOpportunitiesByUser', () => {
 
     it('handles multiple opportunities', () => {
         const results = [
-            makeResult('100', { tranid: 'OPP-001', entitystatus: '6', probability: '25', expectedclosedate: '1/1/2026', formulatext: 'THIS_QUARTER', projectedtotal: '10000', title: 'Deal A' }, { entity: 'A', entitystatus: 'Proposal' }),
-            makeResult('101', { tranid: 'OPP-002', entitystatus: '7', probability: '75', expectedclosedate: '2/1/2026', formulatext: 'THIS_QUARTER', projectedtotal: '50000', title: 'Deal B' }, { entity: 'B', entitystatus: 'Negotiation' })
+            makeResult('100', { tranid: 'OPP-001', entitystatus: '6', expectedclosedate: '1/1/2026', formulatext: 'THIS_QUARTER', projectedtotal: '10000', title: 'Deal A' }, { entity: 'A', entitystatus: 'Proposal', probability: '25.0%' }),
+            makeResult('101', { tranid: 'OPP-002', entitystatus: '7', expectedclosedate: '2/1/2026', formulatext: 'THIS_QUARTER', projectedtotal: '50000', title: 'Deal B' }, { entity: 'B', entitystatus: 'Negotiation', probability: '75.0%' })
         ];
         mockSearchRun(results);
 
