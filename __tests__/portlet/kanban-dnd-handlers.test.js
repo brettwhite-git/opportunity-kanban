@@ -106,7 +106,8 @@ describe('kanban DnD inline handler strings', () => {
             expect(ondrop).not.toContain('querySelector(\'.kanban-card[data-opp-id');
             expect(ondrop).toContain("kanban-column-body.kanban-drop-hover");
             expect(ondrop).toContain("setAttribute('data-entitystatus',tid)");
-            expect(ondrop).not.toContain('kanban-card-probability');
+            expect(ondrop).toContain('kanban-card-probability');
+            expect(ondrop).toContain('d.probability!=null');
         });
     });
 

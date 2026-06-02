@@ -48,6 +48,16 @@
         return n.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ',');
     }
 
+    function formatCardProbability(raw) {
+        if (raw == null || raw === '') return '0%';
+        return String(raw) + '%';
+    }
+
+    // Quote-safe expression for inline ondrop — must stay equivalent to formatCardProbability.
+    function cardProbabilityDisplayFromRawExpr(rawExpr) {
+        return '((' + rawExpr + '==null||String(' + rawExpr + ")==='')?'0%':String(" + rawExpr + ")+'%')";
+    }
+
     function classifyStatus(statusText) {
         if (!statusText) return 'open';
         var t = statusText.toLowerCase();
@@ -277,6 +287,8 @@
             "else if(lt.indexOf('closed lost')>=0||lt.indexOf('closed - lost')>=0)tp='lost';" +
             "card.setAttribute('data-entitystatus',tid);" +
             "card.setAttribute('data-status-type',tp);" +
+            "if(d.probability!=null){var prEl=card.querySelector('.kanban-card-probability');if(prEl)prEl.textContent=" +
+            cardProbabilityDisplayFromRawExpr('d.probability') + ";}" +
             recountVisibleColumnCounts() +
             recountVisibleKpis() +
             "}else{try{if(srcBody&&card.parentNode!==srcBody){srcBody.appendChild(card);}}catch(revertEx){}" +
@@ -1088,7 +1100,7 @@
 
         var prob = document.createElement('span');
         prob.className = 'kanban-card-probability';
-        prob.textContent = (opp.probability || '0') + '%';
+        prob.textContent = formatCardProbability(opp.probability);
 
         header.appendChild(tranid);
         header.appendChild(prob);

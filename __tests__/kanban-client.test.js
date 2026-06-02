@@ -218,6 +218,20 @@ describe('card display', () => {
         expect(probs[0].textContent).toBe('50%');
     });
 
+    it('shows probability with decimal precision from search value', () => {
+        window.KANBAN_DATA = makeSampleData({
+            opportunities: [{
+                id: '100', tranid: 'OPP-001', companyname: 'Acme',
+                entitystatus: '6', entitystatusText: 'Proposal', probability: '90.0',
+                expectedclosedate: '3/15/2026', closeDateGroup: 'THIS_MONTH THIS_QUARTER',
+                projectedtotal: '150000', title: 'Deal A'
+            }]
+        });
+        loadClient();
+
+        expect(document.querySelector('.kanban-card-probability').textContent).toBe('90.0%');
+    });
+
     it('shows column counts reflecting active filter', () => {
         window.KANBAN_DATA = makeSampleData();
         loadClient();
@@ -716,24 +730,30 @@ describe('drag and drop attribute strings', () => {
         delete global.fetch;
     });
 
-    it('updates card status attributes after drop without changing probability display', async () => {
+    it('updates card status and probability after drop using preserved format', async () => {
         window.KANBAN_DATA = makeSampleData({
             updateUrl: '/app/site/hosting/scriptlet.nl?script=99&deploy=1',
-            allowedStatusIds: ['6', '7'],
-            selectedStatusIds: ['6', '7']
+            allowedStatusIds: ['6', '7', '8'],
+            selectedStatusIds: ['6', '7', '8'],
+            opportunities: [{
+                id: '100', tranid: 'OPP-001', companyname: 'Acme',
+                entitystatus: '6', entitystatusText: 'Proposal', probability: '90.0',
+                expectedclosedate: '3/15/2026', closeDateGroup: 'THIS_MONTH THIS_QUARTER',
+                projectedtotal: '150000', title: 'Deal A'
+            }]
         });
         loadClient();
 
         const card = document.querySelector('.kanban-card[data-opp-id="100"]');
         expect(card.getAttribute('data-entitystatus')).toBe('6');
         const probEl = card.querySelector('.kanban-card-probability');
-        expect(probEl.textContent).toBe('50%');
+        expect(probEl.textContent).toBe('90.0%');
 
         global.fetch = jest.fn().mockResolvedValue({
-            json: () => Promise.resolve({ ok: true, entitystatusText: 'Negotiation' })
+            json: () => Promise.resolve({ ok: true, entitystatusText: 'Closed Won', probability: '100' })
         });
 
-        const targetBody = document.querySelector('.kanban-column[data-status="7"] .kanban-column-body');
+        const targetBody = document.querySelector('.kanban-column[data-status="8"] .kanban-column-body');
         const ondrop = targetBody.getAttribute('ondrop');
         new Function('event', ondrop).call(targetBody, {
             preventDefault() {},
@@ -744,11 +764,67 @@ describe('drag and drop attribute strings', () => {
         await global.fetch.mock.results[0].value.then(function (r) { return r.json(); });
         await new Promise(function (resolve) { setTimeout(resolve, 0); });
 
-        expect(card.getAttribute('data-entitystatus')).toBe('7');
-        expect(card.getAttribute('data-status-type')).toBe('open');
+        expect(card.getAttribute('data-entitystatus')).toBe('8');
+        expect(card.getAttribute('data-status-type')).toBe('won');
+        expect(probEl.textContent).toBe('100%');
+
+        delete global.fetch;
+    });
+
+    it('leaves probability badge unchanged when save response omits probability', async () => {
+        window.KANBAN_DATA = makeSampleData({
+            updateUrl: '/app/site/hosting/scriptlet.nl?script=99&deploy=1',
+            allowedStatusIds: ['6', '7'],
+            selectedStatusIds: ['6', '7']
+        });
+        loadClient();
+
+        const probEl = document.querySelector('.kanban-card-probability');
+        expect(probEl.textContent).toBe('50%');
+
+        global.fetch = jest.fn().mockResolvedValue({
+            json: () => Promise.resolve({ ok: true, entitystatusText: 'Negotiation' })
+        });
+
+        const targetBody = document.querySelector('.kanban-column[data-status="7"] .kanban-column-body');
+        new Function('event', targetBody.getAttribute('ondrop')).call(targetBody, {
+            preventDefault() {},
+            stopPropagation() {},
+            dataTransfer: { getData: () => '100' }
+        });
+
+        await global.fetch.mock.results[0].value.then(function (r) { return r.json(); });
+        await new Promise(function (resolve) { setTimeout(resolve, 0); });
+
         expect(probEl.textContent).toBe('50%');
 
         delete global.fetch;
+    });
+
+    it('ondrop embedded probability expression matches formatCardProbability rule', () => {
+        function formatCardProbabilityMirror(raw) {
+            if (raw == null || raw === '') return '0%';
+            return String(raw) + '%';
+        }
+
+        function cardProbabilityDisplayFromRawExpr(rawExpr) {
+            return '((' + rawExpr + '==null||String(' + rawExpr + ")==='')?'0%':String(" + rawExpr + ")+'%')";
+        }
+
+        window.KANBAN_DATA = makeSampleData({
+            updateUrl: '/app/site/hosting/scriptlet.nl?script=99&deploy=1'
+        });
+        loadClient();
+
+        const ondrop = document.querySelector('.kanban-column-body').getAttribute('ondrop');
+        expect(ondrop).toContain(cardProbabilityDisplayFromRawExpr('d.probability'));
+        expect(ondrop).toContain("d.probability!=null");
+
+        ['50', '90.0', '100', 0].forEach((value) => {
+            const expr = cardProbabilityDisplayFromRawExpr('d.probability');
+            const result = new Function('d', 'return ' + expr)({ probability: value });
+            expect(result).toBe(formatCardProbabilityMirror(value));
+        });
     });
 
     it('ondrop string includes KPI recalculation', () => {
