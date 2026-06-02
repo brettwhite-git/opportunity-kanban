@@ -276,6 +276,7 @@
             "if(lt.indexOf('closed won')>=0||lt.indexOf('closed - won')>=0)tp='won';" +
             "else if(lt.indexOf('closed lost')>=0||lt.indexOf('closed - lost')>=0)tp='lost';" +
             "card.setAttribute('data-status-type',tp);" +
+            "if(d.probability!=null&&String(d.probability)!==''){var prEl=card.querySelector('.kanban-card-probability');if(prEl)prEl.textContent=String(d.probability)+'%';}" +
             recountVisibleColumnCounts() +
             recountVisibleKpis() +
             "}else{try{if(srcBody&&card.parentNode!==srcBody){srcBody.appendChild(card);}}catch(revertEx){}" +

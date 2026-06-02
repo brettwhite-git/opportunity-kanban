@@ -77,6 +77,7 @@ describe('update-opportunity-status suitelet', () => {
                 if (opts.fieldId === 'salesrep') return 42;
                 if (opts.fieldId === 'expectedclosedate') return '3/15/2026';
                 if (opts.fieldId === 'entitystatus') return '6';
+                if (opts.fieldId === 'probability') return '50';
                 return '';
             }),
             getText: jest.fn(() => 'Proposal')
@@ -84,7 +85,10 @@ describe('update-opportunity-status suitelet', () => {
         record.load
             .mockReturnValueOnce(mockOpp)
             .mockReturnValueOnce({
-                getValue: jest.fn(() => '50'),
+                getValue: jest.fn((opts) => {
+                    if (opts.fieldId === 'probability') return '75';
+                    return '';
+                }),
                 getText: jest.fn(() => 'Negotiation')
             });
 
@@ -100,6 +104,7 @@ describe('update-opportunity-status suitelet', () => {
 
         const payload = JSON.parse(response.getBody());
         expect(payload.ok).toBe(true);
+        expect(payload.probability).toBe('75');
         expect(record.submitFields).toHaveBeenCalled();
     });
 });

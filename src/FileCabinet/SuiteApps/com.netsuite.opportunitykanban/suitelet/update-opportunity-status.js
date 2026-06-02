@@ -106,7 +106,8 @@ define(['N/record', 'N/runtime', '../lib/queries'], (record, runtime, queries) =
                 writeJson(response, {
                     ok: true,
                     entitystatus,
-                    entitystatusText: opp.getText({ fieldId: 'entitystatus' })
+                    entitystatusText: opp.getText({ fieldId: 'entitystatus' }),
+                    probability: opp.getValue({ fieldId: 'probability' })
                 });
                 return;
             }
