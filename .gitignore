@@ -33,7 +33,7 @@ coverage/
 compound-engineering/
 compound-engineering.local.md
 
-# Project docs (not deployed, local reference only)
+# Local project docs — not published to the public repo (keep on disk only)
 archive/
 CHANGELOG.md
 CLAUDE.md
