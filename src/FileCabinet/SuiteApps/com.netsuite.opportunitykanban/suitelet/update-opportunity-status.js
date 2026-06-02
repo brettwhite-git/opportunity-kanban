@@ -23,6 +23,11 @@ define(['N/record', 'N/runtime', '../lib/queries'], (record, runtime, queries) =
 
     const isNumericId = (value) => /^\d+$/.test(String(value || '').trim());
 
+    const readProbabilityDisplay = (rec) => {
+        const text = rec.getText({ fieldId: 'probability' });
+        return text != null ? String(text) : '';
+    };
+
     const toIsoDate = (value) => {
         if (!value) return '';
         if (value instanceof Date && !isNaN(value.getTime())) {
@@ -106,7 +111,8 @@ define(['N/record', 'N/runtime', '../lib/queries'], (record, runtime, queries) =
                 writeJson(response, {
                     ok: true,
                     entitystatus,
-                    entitystatusText: opp.getText({ fieldId: 'entitystatus' })
+                    entitystatusText: opp.getText({ fieldId: 'entitystatus' }),
+                    probability: readProbabilityDisplay(opp)
                 });
                 return;
             }
@@ -114,7 +120,10 @@ define(['N/record', 'N/runtime', '../lib/queries'], (record, runtime, queries) =
             record.submitFields({
                 type: record.Type.OPPORTUNITY,
                 id: opportunityId,
-                values: { entitystatus }
+                values: { entitystatus },
+                options: {
+                    enableSourcing: true
+                }
             });
 
             const updated = record.load({
@@ -127,7 +136,7 @@ define(['N/record', 'N/runtime', '../lib/queries'], (record, runtime, queries) =
                 ok: true,
                 entitystatus,
                 entitystatusText: updated.getText({ fieldId: 'entitystatus' }),
-                probability: updated.getValue({ fieldId: 'probability' })
+                probability: readProbabilityDisplay(updated)
             });
         } catch (e) {
             log.error({

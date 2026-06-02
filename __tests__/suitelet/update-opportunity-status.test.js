@@ -77,6 +77,7 @@ describe('update-opportunity-status suitelet', () => {
                 if (opts.fieldId === 'salesrep') return 42;
                 if (opts.fieldId === 'expectedclosedate') return '3/15/2026';
                 if (opts.fieldId === 'entitystatus') return '6';
+                if (opts.fieldId === 'probability') return '50';
                 return '';
             }),
             getText: jest.fn(() => 'Proposal')
@@ -84,8 +85,12 @@ describe('update-opportunity-status suitelet', () => {
         record.load
             .mockReturnValueOnce(mockOpp)
             .mockReturnValueOnce({
-                getValue: jest.fn(() => '50'),
-                getText: jest.fn(() => 'Negotiation')
+                getValue: jest.fn(() => ''),
+                getText: jest.fn((opts) => {
+                    if (opts.fieldId === 'entitystatus') return 'Closed Won';
+                    if (opts.fieldId === 'probability') return '100.0%';
+                    return '';
+                })
             });
 
         const response = mockResponse();
@@ -100,6 +105,12 @@ describe('update-opportunity-status suitelet', () => {
 
         const payload = JSON.parse(response.getBody());
         expect(payload.ok).toBe(true);
-        expect(record.submitFields).toHaveBeenCalled();
+        expect(payload.entitystatusText).toBe('Closed Won');
+        expect(payload.probability).toBe('100.0%');
+        expect(record.submitFields).toHaveBeenCalledWith(
+            expect.objectContaining({
+                options: expect.objectContaining({ enableSourcing: true })
+            })
+        );
     });
 });

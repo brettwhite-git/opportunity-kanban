@@ -42,25 +42,25 @@ function makeSampleData(overrides) {
         opportunities: [
             {
                 id: '100', tranid: 'OPP-001', companyname: 'Acme Corporation',
-                entitystatus: '6', entitystatusText: 'Proposal', probability: '50',
+                entitystatus: '6', entitystatusText: 'Proposal', probability: '50.0%',
                 expectedclosedate: '3/15/2026', closeDateGroup: 'THIS_MONTH THIS_QUARTER',
                 projectedtotal: '150000', title: 'Deal A'
             },
             {
                 id: '101', tranid: 'OPP-002', companyname: 'Global Industries International Corp',
-                entitystatus: '7', entitystatusText: 'Negotiation', probability: '75',
+                entitystatus: '7', entitystatusText: 'Negotiation', probability: '75.0%',
                 expectedclosedate: '6/1/2026', closeDateGroup: 'NEXT_QUARTER',
                 projectedtotal: '2500000', title: 'Deal B'
             },
             {
                 id: '102', tranid: 'OPP-003', companyname: 'Won Corp',
-                entitystatus: '8', entitystatusText: 'Closed Won', probability: '100',
+                entitystatus: '8', entitystatusText: 'Closed Won', probability: '100.0%',
                 expectedclosedate: '3/10/2026', closeDateGroup: 'THIS_MONTH THIS_QUARTER',
                 projectedtotal: '75000', title: 'Won Deal'
             },
             {
                 id: '103', tranid: 'OPP-004', companyname: 'Lost Inc',
-                entitystatus: '9', entitystatusText: 'Closed Lost', probability: '0',
+                entitystatus: '9', entitystatusText: 'Closed Lost', probability: '0.0%',
                 expectedclosedate: '3/5/2026', closeDateGroup: 'THIS_MONTH THIS_QUARTER',
                 projectedtotal: '30000', title: 'Lost Deal'
             }
@@ -215,7 +215,21 @@ describe('card display', () => {
         loadClient();
 
         const probs = document.querySelectorAll('.kanban-card-probability');
-        expect(probs[0].textContent).toBe('50%');
+        expect(probs[0].textContent).toBe('50.0%');
+    });
+
+    it('shows probability with decimal precision from search value', () => {
+        window.KANBAN_DATA = makeSampleData({
+            opportunities: [{
+                id: '100', tranid: 'OPP-001', companyname: 'Acme',
+                entitystatus: '6', entitystatusText: 'Proposal', probability: '90.0%',
+                expectedclosedate: '3/15/2026', closeDateGroup: 'THIS_MONTH THIS_QUARTER',
+                projectedtotal: '150000', title: 'Deal A'
+            }]
+        });
+        loadClient();
+
+        expect(document.querySelector('.kanban-card-probability').textContent).toBe('90.0%');
     });
 
     it('shows column counts reflecting active filter', () => {
@@ -547,13 +561,13 @@ describe('KPI cards', () => {
             opportunities: [
                 {
                     id: '200', tranid: 'OPP-W', companyname: 'A',
-                    entitystatus: '10', entitystatusText: 'Closed - Won', probability: '100',
+                    entitystatus: '10', entitystatusText: 'Closed - Won', probability: '100.0%',
                     expectedclosedate: '3/1/2026', closeDateGroup: 'THIS_MONTH',
                     projectedtotal: '10000', title: 'W'
                 },
                 {
                     id: '201', tranid: 'OPP-L', companyname: 'B',
-                    entitystatus: '11', entitystatusText: 'Closed - Lost', probability: '0',
+                    entitystatus: '11', entitystatusText: 'Closed - Lost', probability: '0.0%',
                     expectedclosedate: '3/1/2026', closeDateGroup: 'THIS_MONTH',
                     projectedtotal: '5000', title: 'L'
                 }
@@ -676,13 +690,13 @@ describe('drag and drop attribute strings', () => {
             opportunities: [
                 {
                     id: '100', tranid: 'OPP-001', companyname: 'Near Corp',
-                    entitystatus: '6', entitystatusText: 'Proposal', probability: '50',
+                    entitystatus: '6', entitystatusText: 'Proposal', probability: '50.0%',
                     expectedclosedate: '2/15/2026', closeDateGroup: 'THIS_MONTH THIS_QUARTER',
                     projectedtotal: '10000', title: 'Near'
                 },
                 {
                     id: '101', tranid: 'OPP-002', companyname: 'Quarter Corp',
-                    entitystatus: '6', entitystatusText: 'Proposal', probability: '25',
+                    entitystatus: '6', entitystatusText: 'Proposal', probability: '25.0%',
                     expectedclosedate: '3/15/2026', closeDateGroup: 'THIS_QUARTER',
                     projectedtotal: '50000', title: 'Quarter'
                 }
@@ -714,6 +728,88 @@ describe('drag and drop attribute strings', () => {
         expect(document.querySelector('.kanban-column[data-status="7"] .kanban-column-count').textContent).toBe('1');
 
         delete global.fetch;
+    });
+
+    it('updates card status and probability after drop using preserved format', async () => {
+        window.KANBAN_DATA = makeSampleData({
+            updateUrl: '/app/site/hosting/scriptlet.nl?script=99&deploy=1',
+            allowedStatusIds: ['6', '7', '8'],
+            selectedStatusIds: ['6', '7', '8'],
+            opportunities: [{
+                id: '100', tranid: 'OPP-001', companyname: 'Acme',
+                entitystatus: '6', entitystatusText: 'Proposal', probability: '90.0%',
+                expectedclosedate: '3/15/2026', closeDateGroup: 'THIS_MONTH THIS_QUARTER',
+                projectedtotal: '150000', title: 'Deal A'
+            }]
+        });
+        loadClient();
+
+        const card = document.querySelector('.kanban-card[data-opp-id="100"]');
+        expect(card.getAttribute('data-entitystatus')).toBe('6');
+        const probEl = card.querySelector('.kanban-card-probability');
+        expect(probEl.textContent).toBe('90.0%');
+
+        global.fetch = jest.fn().mockResolvedValue({
+            json: () => Promise.resolve({ ok: true, entitystatusText: 'Closed Won', probability: '100.0%' })
+        });
+
+        const targetBody = document.querySelector('.kanban-column[data-status="8"] .kanban-column-body');
+        const ondrop = targetBody.getAttribute('ondrop');
+        new Function('event', ondrop).call(targetBody, {
+            preventDefault() {},
+            stopPropagation() {},
+            dataTransfer: { getData: () => '100' }
+        });
+
+        await global.fetch.mock.results[0].value.then(function (r) { return r.json(); });
+        await new Promise(function (resolve) { setTimeout(resolve, 0); });
+
+        expect(card.getAttribute('data-entitystatus')).toBe('8');
+        expect(card.getAttribute('data-status-type')).toBe('won');
+        expect(probEl.textContent).toBe('100.0%');
+
+        delete global.fetch;
+    });
+
+    it('leaves probability badge unchanged when save response omits probability', async () => {
+        window.KANBAN_DATA = makeSampleData({
+            updateUrl: '/app/site/hosting/scriptlet.nl?script=99&deploy=1',
+            allowedStatusIds: ['6', '7'],
+            selectedStatusIds: ['6', '7']
+        });
+        loadClient();
+
+        const probEl = document.querySelector('.kanban-card-probability');
+        expect(probEl.textContent).toBe('50.0%');
+
+        global.fetch = jest.fn().mockResolvedValue({
+            json: () => Promise.resolve({ ok: true, entitystatusText: 'Negotiation' })
+        });
+
+        const targetBody = document.querySelector('.kanban-column[data-status="7"] .kanban-column-body');
+        new Function('event', targetBody.getAttribute('ondrop')).call(targetBody, {
+            preventDefault() {},
+            stopPropagation() {},
+            dataTransfer: { getData: () => '100' }
+        });
+
+        await global.fetch.mock.results[0].value.then(function (r) { return r.json(); });
+        await new Promise(function (resolve) { setTimeout(resolve, 0); });
+
+        expect(probEl.textContent).toBe('50.0%');
+
+        delete global.fetch;
+    });
+
+    it('ondrop sets probability badge from suitelet display text without reformatting', () => {
+        window.KANBAN_DATA = makeSampleData({
+            updateUrl: '/app/site/hosting/scriptlet.nl?script=99&deploy=1'
+        });
+        loadClient();
+
+        const ondrop = document.querySelector('.kanban-column-body').getAttribute('ondrop');
+        expect(ondrop).toContain('prEl.textContent=String(d.probability)');
+        expect(ondrop).not.toContain("+'%'");
     });
 
     it('ondrop string includes KPI recalculation', () => {
@@ -791,7 +887,7 @@ describe('drag and drop attribute strings', () => {
             opportunities: [
                 {
                     id: '100', tranid: 'OPP-001', companyname: 'Locked Corp',
-                    entitystatus: '6', entitystatusText: 'Proposal', probability: '50',
+                    entitystatus: '6', entitystatusText: 'Proposal', probability: '50.0%',
                     expectedclosedate: '1/15/2026', closeDateGroup: 'THIS_MONTH',
                     projectedtotal: '10000', title: 'Locked', isInClosedPeriod: true
                 }

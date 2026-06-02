@@ -18,7 +18,7 @@ function makeSampleData(overrides) {
         opportunities: [
             {
                 id: '100', tranid: 'OPP-001', companyname: 'Acme Corporation',
-                entitystatus: '6', entitystatusText: 'Proposal', probability: '50',
+                entitystatus: '6', entitystatusText: 'Proposal', probability: '50.0%',
                 expectedclosedate: '3/15/2026', closeDateGroup: 'THIS_MONTH THIS_QUARTER',
                 projectedtotal: '150000', title: 'Deal A'
             }
@@ -105,6 +105,10 @@ describe('kanban DnD inline handler strings', () => {
             expect(ondrop).toContain("getAttribute('data-opp-id')===oid");
             expect(ondrop).not.toContain('querySelector(\'.kanban-card[data-opp-id');
             expect(ondrop).toContain("kanban-column-body.kanban-drop-hover");
+            expect(ondrop).toContain("setAttribute('data-entitystatus',tid)");
+            expect(ondrop).toContain('kanban-card-probability');
+            expect(ondrop).toContain('String(d.probability)');
+            expect(ondrop).not.toContain("+'%'");
         });
     });
 
