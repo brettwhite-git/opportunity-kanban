@@ -12,6 +12,7 @@ symptoms:
 root_cause: wrong_api
 resolution_type: code_fix
 severity: medium
+last_refreshed: 2026-06-02
 tags:
   - netsuite
   - suitescript
@@ -102,5 +103,6 @@ const resolveSearchProbabilityDisplay = (result) => {
 
 ## Related Issues
 
-- PR: fix/kanban-probability-on-drag
+- Merged: [PR #2](https://github.com/brettwhite-git/opportunity-kanban/pull/2) (`main`, 2026-06-02)
 - Plan (superseded): `docs/plans/2026-06-01-001-fix-kanban-probability-display-plan.md`
+- Related kanban search patterns: `docs/solutions/integration-issues/opportunity-kanban-entity-status-column-labels-2026-05-31.md`
