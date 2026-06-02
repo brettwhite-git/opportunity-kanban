@@ -1,6 +1,7 @@
 import queries from 'SuiteScripts/lib/queries';
 import search from 'N/search';
 import query from 'N/query';
+import record from 'N/record';
 
 beforeEach(() => {
     jest.restoreAllMocks();
@@ -285,6 +286,155 @@ describe('getOpportunitiesByUser', () => {
                 filters: [['salesrep', 'anyof', 42]]
             })
         );
+    });
+
+    it('uses lookupFields text when search getText is empty', () => {
+        const lookupSpy = jest.spyOn(search, 'lookupFields').mockReturnValue({
+            probability: [{ text: '75.0%', value: '0.75' }]
+        });
+        const results = [
+            makeResult(
+                '12345',
+                {
+                    tranid: 'OPP-0110',
+                    entitystatus: '6',
+                    probability: '0.75',
+                    expectedclosedate: '3/15/2026',
+                    formulatext: 'THIS_QUARTER',
+                    projectedtotal: '100000.00',
+                    title: 'Deal'
+                },
+                { entity: 'Acme Corp', entitystatus: 'Proposal', probability: '' }
+            )
+        ];
+        mockSearchRun(results);
+
+        const opps = queries.getOpportunitiesByUser(42);
+
+        expect(opps[0].probability).toBe('75.0%');
+        expect(lookupSpy).toHaveBeenCalledWith({
+            type: search.Type.OPPORTUNITY,
+            id: '12345',
+            columns: ['probability']
+        });
+    });
+});
+
+describe('resolveSearchProbabilityDisplay', () => {
+    let lookupSpy;
+    let recordLoadSpy;
+
+    beforeEach(() => {
+        lookupSpy = jest.spyOn(search, 'lookupFields').mockReturnValue({
+            probability: [{ text: '75.0%', value: '0.75' }]
+        });
+        recordLoadSpy = jest.spyOn(record, 'load').mockReturnValue({
+            getText: jest.fn(() => '')
+        });
+    });
+
+    it('prefers non-empty getText', () => {
+        const result = {
+            id: '100',
+            getText: jest.fn(() => '50.0%'),
+            getValue: jest.fn(() => '50')
+        };
+
+        expect(queries.resolveSearchProbabilityDisplay(result)).toBe('50.0%');
+        expect(lookupSpy).not.toHaveBeenCalled();
+    });
+
+    it('uses lookupFields text when getText is empty', () => {
+        const result = {
+            id: '110',
+            getText: jest.fn(() => ''),
+            getValue: jest.fn(() => '0.75')
+        };
+
+        expect(queries.resolveSearchProbabilityDisplay(result)).toBe('75.0%');
+        expect(lookupSpy).toHaveBeenCalledWith({
+            type: search.Type.OPPORTUNITY,
+            id: '110',
+            columns: ['probability']
+        });
+    });
+
+    it('returns empty string when getText, lookup, and record text are empty', () => {
+        lookupSpy.mockReturnValue({ probability: [{ text: '', value: '' }] });
+        recordLoadSpy.mockReturnValue({
+            getText: jest.fn(() => '')
+        });
+        const result = {
+            id: '111',
+            getText: jest.fn(() => ''),
+            getValue: jest.fn(() => '')
+        };
+
+        expect(queries.resolveSearchProbabilityDisplay(result)).toBe('');
+        expect(recordLoadSpy).toHaveBeenCalledWith({
+            type: record.Type.OPPORTUNITY,
+            id: '111',
+            isDynamic: false
+        });
+    });
+
+    it('uses lookupFields object text when probability is not an array', () => {
+        lookupSpy.mockReturnValue({
+            probability: { text: '50.0%', value: '0.5' }
+        });
+        const result = {
+            id: '101',
+            getText: jest.fn(() => ''),
+            getValue: jest.fn(() => '0.5')
+        };
+
+        expect(queries.resolveSearchProbabilityDisplay(result)).toBe('50.0%');
+        expect(recordLoadSpy).not.toHaveBeenCalled();
+    });
+
+    it('uses lookupFields scalar when it already includes a percent sign', () => {
+        lookupSpy.mockReturnValue({ probability: '90.0%' });
+        const result = {
+            id: '104',
+            getText: jest.fn(() => ''),
+            getValue: jest.fn(() => '0.9')
+        };
+
+        expect(queries.resolveSearchProbabilityDisplay(result)).toBe('90.0%');
+        expect(recordLoadSpy).not.toHaveBeenCalled();
+    });
+
+    it('falls back to record.getText when lookup only has a raw decimal value', () => {
+        lookupSpy.mockReturnValue({ probability: '0.75' });
+        recordLoadSpy.mockReturnValue({
+            getText: jest.fn((opts) => (opts.fieldId === 'probability' ? '75.0%' : ''))
+        });
+        const result = {
+            id: '110',
+            getText: jest.fn(() => ''),
+            getValue: jest.fn(() => '0.75')
+        };
+
+        expect(queries.resolveSearchProbabilityDisplay(result)).toBe('75.0%');
+        expect(recordLoadSpy).toHaveBeenCalled();
+    });
+
+    it('treats whitespace-only getText as empty and uses lookupFields', () => {
+        lookupSpy.mockReturnValue({
+            probability: [{ text: '90.0%', value: '0.9' }]
+        });
+        const result = {
+            id: '104',
+            getText: jest.fn(() => '   '),
+            getValue: jest.fn(() => '0.9')
+        };
+
+        expect(queries.resolveSearchProbabilityDisplay(result)).toBe('90.0%');
+        expect(lookupSpy).toHaveBeenCalledWith({
+            type: search.Type.OPPORTUNITY,
+            id: '104',
+            columns: ['probability']
+        });
     });
 });
 

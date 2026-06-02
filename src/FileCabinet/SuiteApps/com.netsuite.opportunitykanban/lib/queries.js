@@ -2,7 +2,7 @@
  * @NApiVersion 2.1
  * @NModuleScope SameAccount
  */
-define(['N/search', 'N/query'], (search, query) => {
+define(['N/search', 'N/query', 'N/record'], (search, query, record) => {
 
     /**
      * Normalizes an admin-entered status filter into valid NetSuite internal IDs.
@@ -192,6 +192,91 @@ define(['N/search', 'N/query'], (search, query) => {
     };
 
     /**
+     * Reads probability display text from a loaded opportunity (matches suitelet path).
+     *
+     * @param {string|number} opportunityId - Opportunity internal ID
+     * @returns {string}
+     */
+    const readRecordProbabilityDisplay = (opportunityId) => {
+        try {
+            const rec = record.load({
+                type: record.Type.OPPORTUNITY,
+                id: opportunityId,
+                isDynamic: false
+            });
+            const text = rec.getText({ fieldId: 'probability' });
+            return text != null ? String(text).trim() : '';
+        } catch (e) {
+            log.debug({
+                title: 'readRecordProbabilityDisplay',
+                details: (e.message || e) + ' id=' + opportunityId
+            });
+            return '';
+        }
+    };
+
+    /**
+     * Extracts display text from search.lookupFields probability return value.
+     * NetSuite may return an array, {text,value} object, or a scalar string.
+     *
+     * @param {*} field - lookup.probability
+     * @returns {string} Display text when confidently formatted, else empty
+     */
+    const extractLookupProbabilityText = (field) => {
+        if (field == null || field === '') {
+            return '';
+        }
+        if (Array.isArray(field)) {
+            if (field.length === 0) {
+                return '';
+            }
+            const entry = field[0];
+            if (entry && entry.text != null && String(entry.text).trim() !== '') {
+                return String(entry.text).trim();
+            }
+            return '';
+        }
+        if (typeof field === 'object') {
+            if (field.text != null && String(field.text).trim() !== '') {
+                return String(field.text).trim();
+            }
+            return '';
+        }
+        const scalar = String(field).trim();
+        if (scalar.indexOf('%') >= 0) {
+            return scalar;
+        }
+        return '';
+    };
+
+    /**
+     * Resolves display-ready probability from a search result row.
+     * Search getText is often empty for percent columns; fall back to lookupFields,
+     * then record.getText so initial load matches post-drag display.
+     *
+     * @param {search.Result} result - Opportunity search result row
+     * @returns {string} Formatted probability for card display, or empty string
+     */
+    const resolveSearchProbabilityDisplay = (result) => {
+        const text = result.getText({ name: 'probability' });
+        if (text != null && String(text).trim() !== '') {
+            return String(text).trim();
+        }
+
+        const lookup = search.lookupFields({
+            type: search.Type.OPPORTUNITY,
+            id: result.id,
+            columns: ['probability']
+        });
+        const fromLookup = extractLookupProbabilityText(lookup.probability);
+        if (fromLookup) {
+            return fromLookup;
+        }
+
+        return readRecordProbabilityDisplay(result.id);
+    };
+
+    /**
      * Fetches all opportunities assigned to a given sales rep.
      *
      * @param {number|string} userId - Internal ID of the sales rep
@@ -234,7 +319,7 @@ define(['N/search', 'N/query'], (search, query) => {
                 companyname: result.getText({ name: 'entity' }),
                 entitystatus: result.getValue({ name: 'entitystatus' }),
                 entitystatusText: result.getText({ name: 'entitystatus' }),
-                probability: result.getText({ name: 'probability' }) || '',
+                probability: resolveSearchProbabilityDisplay(result),
                 expectedclosedate: result.getValue({ name: 'expectedclosedate' }),
                 closeDateGroup: result.getValue({ name: 'formulatext' }) || 'OTHER',
                 projectedtotal: result.getValue({ name: 'projectedtotal' }),
@@ -447,6 +532,7 @@ define(['N/search', 'N/query'], (search, query) => {
         isCloseDateInClosedPeriod,
         markOpportunitiesInClosedPeriods,
         normalizeStatusIds,
-        parseClosedAccountingRanges
+        parseClosedAccountingRanges,
+        resolveSearchProbabilityDisplay
     };
 });
