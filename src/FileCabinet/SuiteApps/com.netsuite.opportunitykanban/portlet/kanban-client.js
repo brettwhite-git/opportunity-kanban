@@ -964,7 +964,7 @@
         acctModeBtn.className = 'kanban-filter-mode-btn active';
         acctModeBtn.setAttribute('role', 'button');
         acctModeBtn.setAttribute('tabindex', '0');
-        acctModeBtn.textContent = 'Accounting';
+        acctModeBtn.textContent = 'Period';
         acctModeBtn.setAttribute('onclick', makeFilterModeOnclick('acct', hideEmptyCols));
 
         var quarterModeBtn = document.createElement('div');
