@@ -496,13 +496,13 @@
             "var val=document.getElementById('kanban-filter-chip-value');var sep=document.getElementById('kanban-filter-chip-sep');" +
             "var clr=document.getElementById('kanban-filter-chip-clear');" +
             "var modeEl=document.getElementById('kanban-filter-mode');var mv=modeEl?modeEl.value:'acct';" +
-            "var active=false;var showClear=false;var label='Accounting';var value='Select period';" +
+            "var active=false;var showClear=false;var label='Period';var value='Select period';" +
             "function fmtIso(iso){if(!iso||iso.length<10)return '';var p=iso.split('-');return p[1]+'/'+p[2]+'/'+p[0];}" +
             "if(mv==='range'){label='Close date';" +
             "var rs=document.getElementById('kanban-date-start');var re=document.getElementById('kanban-date-end');" +
             "var rsv=rs?rs.value:'';var rev=re?re.value:'';" +
             "if(rsv&&rev){value=fmtIso(rsv)+' \\u2013 '+fmtIso(rev);active=true;showClear=true;}else{value='Select range';}" +
-            "}else{label=mv==='quarter'?'Quarter':'Accounting';" +
+            "}else{label=mv==='quarter'?'Quarter':'Period';" +
             "var sel=document.querySelectorAll('.kanban-period-cb[data-period-group='+mv+']:checked');" +
             "if(sel.length===1){var row=sel[0].parentElement;value=row?row.textContent.replace(/^\\s+/,'').trim():'Selected';active=true;showClear=true;}" +
             "else if(sel.length>1){value=String(sel.length);active=true;showClear=true;}}" +
@@ -719,7 +719,7 @@
                 valueEl.textContent = 'Select range';
             }
         } else {
-            if (labelEl) labelEl.textContent = mv === 'quarter' ? 'Quarter' : 'Accounting';
+            if (labelEl) labelEl.textContent = mv === 'quarter' ? 'Quarter' : 'Period';
             var selected = document.querySelectorAll('.kanban-period-cb[data-period-group="' + mv + '"]:checked');
             if (selected.length === 0) {
                 if (valueEl) valueEl.textContent = 'Select period';
@@ -910,7 +910,7 @@
         var chipLabel = document.createElement('span');
         chipLabel.className = 'kanban-filter-chip-label';
         chipLabel.id = 'kanban-filter-chip-label';
-        chipLabel.textContent = 'Accounting';
+        chipLabel.textContent = 'Period';
 
         var chipSep = document.createElement('span');
         chipSep.className = 'kanban-filter-chip-sep';

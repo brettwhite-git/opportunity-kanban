@@ -326,7 +326,7 @@ describe('close date filters', () => {
         expect(cards[2].style.display).toBe('');
         expect(cards[3].style.display).toBe('');
         expect(document.getElementById('kpi-count').textContent).toBe('3');
-        expect(document.getElementById('kanban-filter-chip-label').textContent).toBe('Accounting');
+        expect(document.getElementById('kanban-filter-chip-label').textContent).toBe('Period');
         expect(document.getElementById('kanban-filter-chip-value').textContent).toBe('Mar 2026');
         expect(document.getElementById('kanban-filter-mode').value).toBe('acct');
     });
