@@ -9,7 +9,7 @@
 A NetSuite SuiteApp that renders a kanban board portlet on dashboards, giving sales reps a visual pipeline of their opportunities organized by status columns—with KPI summaries, period filters, search, and drag-and-drop status updates.
 
 > [!IMPORTANT]
-> **Demonstration SuiteApp — verify in your account before production use**
+> **SuiteApp — verify in your account before production use**
 >
 > This repository is an open-source **example** of a NetSuite HTML portlet with drag-and-drop opportunity updates. It is provided for educational and demonstration purposes only. There is **no warranty** of any kind; you **use it at your own risk**. The code is not certified for quality, security, correctness, or production readiness in your environment.
 >
@@ -17,7 +17,7 @@ A NetSuite SuiteApp that renders a kanban board portlet on dashboards, giving sa
 >
 > Status columns, accounting periods, and permissions **vary by account**. Configure script deployment parameters, test with the same roles that will use the board (including drag-and-drop saves), and review execution logs in a **sandbox** before relying on this in production.
 
-<img width="3012" height="1348" alt="oppkanban" src="https://github.com/user-attachments/assets/5df79493-5884-46b1-aa94-8797b5167286" />
+<video width="3012" height="1348" src="assets/kanban.mp4" autoplay loop muted playsinline></video>
 
 ## Features
 
