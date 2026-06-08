@@ -17,7 +17,8 @@ A NetSuite SuiteApp that renders a kanban board portlet on dashboards, giving sa
 >
 > Status columns, accounting periods, and permissions **vary by account**. Configure script deployment parameters, test with the same roles that will use the board (including drag-and-drop saves), and review execution logs in a **sandbox** before relying on this in production.
 
-<video width="3012" height="1348" src="assets/kanban.mp4" autoplay loop muted playsinline></video>
+[<video width="3012" height="1348" src="assets/kanban.mp4" autoplay loop muted playsinline></video>](https://github.com/user-attachments/assets/a090ffb1-2d62-40ed-85b4-59580dc3b6d2
+)
 
 ## Features
 
@@ -33,7 +34,6 @@ A NetSuite SuiteApp that renders a kanban board portlet on dashboards, giving sa
 - **Currency formatting** — Projected totals shown as $150K, $2.5M, etc.
 - **Portlet-safe architecture** — Hybrid delivery (inline CSS, data injection, external client script) and self-contained inline handlers designed for NetSuite’s portlet HTML extraction
 
-See [CHANGELOG.md](CHANGELOG.md) for release notes and recent changes.
 
 ## How this portlet works
 
